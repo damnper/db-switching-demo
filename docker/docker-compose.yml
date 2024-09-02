@@ -1,0 +1,35 @@
+services:
+  leader-db:
+    image: postgres:latest
+    container_name: leader-db-container
+    environment:
+      POSTGRES_USER: leader_user
+      POSTGRES_PASSWORD: leader_password
+      POSTGRES_DB: leader_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - leader-db-data:/var/lib/postgresql/data
+    networks:
+      - db-network
+
+  replica-db:
+    image: postgres:latest
+    container_name: replica-db-container
+    environment:
+      POSTGRES_USER: replica_user
+      POSTGRES_PASSWORD: replica_password
+      POSTGRES_DB: replica_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - replica-db-data:/var/lib/postgresql/data
+    networks:
+      - db-network
+
+volumes:
+  leader-db-data:
+  replica-db-data:
+
+networks:
+  db-network:
