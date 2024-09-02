@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!-- Уровень корневого логгера -->
+    <root level="INFO">
+        <appender-ref ref="console" />
+    </root>
+
+    <!-- Аппендер для вывода в консоль -->
+    <appender name="console" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%cyan(%d{HH:mm:ss.SSS}) %highlight(%-5level) [%cyan(%thread)] %green(%logger{20}) - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Настройка логгирования для Hibernate -->
+    <logger name="org.hibernate" level="WARN">
+        <appender-ref ref="console"/>
+    </logger>
+
+    <!-- Настройка логгирования для PostgreSQL -->
+    <logger name="org.postgresql" level="WARN">
+        <appender-ref ref="console"/>
+    </logger>
+
+    <logger name="com.example.dbswitchingdemo" level="INFO" additivity="false">
+        <appender-ref ref="console"/>
+    </logger>
+
+    <root level="ERROR">
+        <appender-ref ref="console"/>
+    </root>
+
+</configuration>

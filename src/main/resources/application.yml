@@ -1,1 +1,38 @@
-spring.application.name=db-switching-demo
+server:
+  port: 8080
+
+spring:
+  config:
+    activate:
+      on-profile: development
+
+  application.name: db-switch-demo
+
+  datasource:
+    leader:
+      url: jdbc:postgresql://localhost:5432/leader_db
+      username: leader_user
+      password: leader_password
+      driver-class-name: org.postgresql.Driver
+    replica:
+      url: jdbc:postgresql://localhost:5433/replica_db
+      username: replica_user
+      password: replica_password
+      driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+    properties:
+      properties:
+        hibernate.format_sql: true
+        hibernate.jdbc.timeouts: true
+        hibernate.c3p0.timeout: 5000
+        hibernate.jdbc.batch_size: 20
+
+logging:
+  config: classpath:logback.xml
+
+app:
+  datasource:
+    routing-key: leader
