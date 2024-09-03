@@ -1,0 +1,75 @@
+@startuml
+skinparam backgroundColor #F9F9F9
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam roundcorner 20
+skinparam ArrowColor #6C8EBF
+skinparam ArrowThickness 2
+
+' Цветовые акценты
+skinparam component {
+  BackgroundColor<<Config>> #FAD7A0
+  BackgroundColor<<Service>> #AED6F1
+  BackgroundColor<<Controller>> #A9DFBF
+  BackgroundColor<<Repository>> #F5B7B1
+  BackgroundColor<<Database>> #D5DBDB
+  BorderColor black
+  FontColor black
+}
+
+title <b>Схема взаимодействия компонентов в системе переключения БД</b>
+center footer <i>Создано с использованием PlantUML</i>
+
+package "Конфигурация" <<Config>> {
+    component "DataSourceConfig" as cfg <<Config>> {
+        interface "initialDataSource()" as iDS
+        interface "multiRoutingDataSource()" as mRDS
+    }
+
+    component "MultiRoutingDataSource" as rds <<Config>> {
+        interface "addDataSource()" as ads
+        interface "setTargetDataSources()" as sTDS
+    }
+}
+
+package "Сервис" <<Service>> {
+    component "DataSourceServiceImpl" as dsi <<Service>> {
+        interface "createDataSource()" as cds
+        interface "switchDataSource()" as swds
+        interface "closeDataSource()" as clsds
+    }
+
+    component "DataSourceContextHolder" as dch <<Service>> {
+        interface "setDataSource()" as sds
+        interface "getDataSource()" as gds
+    }
+}
+
+package "Контроллеры" <<Controller>> {
+    component "DatabaseSwitchController" as dbc <<Controller>>
+    component "DataSourceController" as dcc <<Controller>>
+}
+
+package "Логи и база данных" {
+    component "DbSwitchLogRepository" as repo <<Repository>>
+    database "Database" as db <<Database>>
+}
+
+' Контроллеры взаимодействуют с сервисами
+dbc -[#6C8EBF]-|> dsi : switchDataSource(name)
+dcc -[#6C8EBF]-|> dsi : createDataSource(host, port)\ncloseDataSource(name)
+
+' Сервисы взаимодействуют с контекстом данных и маршрутизацией
+dsi -[#6C8EBF]-|> dch : setDataSource(name)
+dsi -[#6C8EBF]-|> rds : addDataSource(name, DataSource)
+dsi -[#6C8EBF]-|> rds : setTargetDataSources()
+dsi -[#6C8EBF]-|> repo : save(DbSwitchLog)
+dsi -[#6C8EBF]-|> db : testConnection(url)
+
+' Конфигурация создает начальные компоненты
+cfg -[#6C8EBF]-|> iDS
+cfg -[#6C8EBF]-|> mRDS
+rds --> ads
+rds --> sTDS
+
+@enduml
