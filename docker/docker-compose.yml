@@ -1,35 +1,80 @@
 services:
-  leader-db:
+  replica-db0:
     image: postgres:latest
-    container_name: leader-db-container
+    container_name: replica-db0-container
     environment:
-      POSTGRES_USER: leader_user
-      POSTGRES_PASSWORD: leader_password
-      POSTGRES_DB: leader_db
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+      POSTGRES_DB: replica_localhost_5433
     ports:
       - "5433:5432"
     volumes:
-      - leader-db-data:/var/lib/postgresql/data
+      - replica-db0-data:/var/lib/postgresql/data
     networks:
       - db-network
 
-  replica-db:
+  replica-db1:
     image: postgres:latest
-    container_name: replica-db-container
+    container_name: replica-db1-container
     environment:
-      POSTGRES_USER: replica_user
-      POSTGRES_PASSWORD: replica_password
-      POSTGRES_DB: replica_db
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+      POSTGRES_DB: replica_localhost_5434
     ports:
       - "5434:5432"
     volumes:
-      - replica-db-data:/var/lib/postgresql/data
+      - replica-db1-data:/var/lib/postgresql/data
+    networks:
+      - db-network
+
+  replica-db2:
+    image: postgres:latest
+    container_name: replica-db2-container
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+      POSTGRES_DB: replica_localhost_5435
+    ports:
+      - "5435:5432"
+    volumes:
+      - replica-db2-data:/var/lib/postgresql/data
+    networks:
+      - db-network
+
+  replica-db3:
+    image: postgres:latest
+    container_name: replica-db3-container
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+      POSTGRES_DB: replica_localhost_5436
+    ports:
+      - "5436:5432"
+    volumes:
+      - replica-db3-data:/var/lib/postgresql/data
+    networks:
+      - db-network
+
+  replica-db4:
+    image: postgres:latest
+    container_name: replica-db4-container
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+      POSTGRES_DB: replica_localhost_5437
+    ports:
+      - "5437:5432"
+    volumes:
+      - replica-db4-data:/var/lib/postgresql/data
     networks:
       - db-network
 
 volumes:
-  leader-db-data:
-  replica-db-data:
+  replica-db0-data:
+  replica-db1-data:
+  replica-db2-data:
+  replica-db3-data:
+  replica-db4-data:
 
 networks:
   db-network:

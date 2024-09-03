@@ -11,17 +11,13 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @NoArgsConstructor
 @Entity
-@Table(name = "db_switch_log", schema = "public")
+@Table(name = "database_switch_log", schema = "public")
 public class DbSwitchLog {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "db_seq_gen")
-    @SequenceGenerator(name = "db_seq_gen", sequenceName = "db_seq", allocationSize = 1)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "switch_to_db", nullable = false)
-    private String switchToDb;
-
-    @Column(name = "switch_timestamp", nullable = false)
-    private LocalDateTime switchTimestamp;
+    @Column(name = "switch_time", nullable = false)
+    private LocalDateTime switchTime;
 }

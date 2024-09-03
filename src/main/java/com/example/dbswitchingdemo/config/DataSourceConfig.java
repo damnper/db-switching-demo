@@ -1,7 +1,7 @@
 package com.example.dbswitchingdemo.config;
 
-import com.example.dbswitchingdemo.enums.DataSourceType;
-import org.springframework.beans.factory.annotation.Qualifier;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.context.annotation.Bean;
@@ -12,70 +12,48 @@ import javax.sql.DataSource;
 import java.util.HashMap;
 import java.util.Map;
 
+@Getter
 @Configuration
+@RequiredArgsConstructor
 public class DataSourceConfig {
 
-    @Value("${spring.leader.datasource.url}")
-    private String leaderUrl;
+    @Value("${spring.datasource.url}")
+    private String url;
 
-    @Value("${spring.leader.datasource.username}")
-    private String leaderUsername;
+    @Value("${spring.datasource.username}")
+    private String username;
 
-    @Value("${spring.leader.datasource.password}")
-    private String leaderPassword;
+    @Value("${spring.datasource.password}")
+    private String password;
 
-    @Value("${spring.leader.datasource.driver-class-name}")
-    private String leaderDriverClassName;
+    @Value("${spring.datasource.driver-class-name}")
+    private String driverClassName;
 
-    @Value("${spring.replica.datasource.url}")
-    private String replicaUrl;
+    @Value("${database.name}")
+    private String name;
 
-    @Value("${spring.replica.datasource.username}")
-    private String replicaUsername;
-
-    @Value("${spring.replica.datasource.password}")
-    private String replicaPassword;
-
-    @Value("${spring.replica.datasource.driver-class-name}")
-    private String replicaDriverClassName;
-
-    @Bean(name = "leaderDataSource")
-    public DataSource leaderDataSource() {
+    @Bean(name = "initialDataSource")
+    public DataSource initialDataSource() {
         return DataSourceBuilder.create()
-                .url(leaderUrl)
-                .username(leaderUsername)
-                .password(leaderPassword)
-                .driverClassName(leaderDriverClassName)
-                .build();
-    }
-
-    @Bean(name = "replicaDataSource")
-    public DataSource replicaDataSource() {
-        return DataSourceBuilder.create()
-                .url(replicaUrl)
-                .username(replicaUsername)
-                .password(replicaPassword)
-                .driverClassName(replicaDriverClassName)
+                .url(url)
+                .username(username)
+                .password(password)
+                .driverClassName(driverClassName)
                 .build();
     }
 
     @Bean
     @Primary
-    public DataSource routingDataSource(
-            @Qualifier("leaderDataSource") DataSource leaderDataSource,
-            @Qualifier("replicaDataSource") DataSource replicaDataSource) {
-
+    public MultiRoutingDataSource multiRoutingDataSource(DataSource initialDataSource) {
         MultiRoutingDataSource routingDataSource = new MultiRoutingDataSource();
+
         Map<Object, Object> targetDataSources = new HashMap<>();
-        targetDataSources.put(DataSourceType.LEADER, leaderDataSource);
-        targetDataSources.put(DataSourceType.REPLICA, replicaDataSource);
+        targetDataSources.put("dbname_localhost_5433", initialDataSource);
 
         routingDataSource.setTargetDataSources(targetDataSources);
-        routingDataSource.setDefaultTargetDataSource(leaderDataSource);
-        routingDataSource.afterPropertiesSet();
+        routingDataSource.setDefaultTargetDataSource(initialDataSource);
 
+        routingDataSource.afterPropertiesSet();
         return routingDataSource;
     }
-
-
 }
