@@ -1,7 +1,7 @@
 package com.example.dbswitchingdemo.service.impl;
 
-import com.example.dbswitchingdemo.config.DataSourceConfig;
 import com.example.dbswitchingdemo.config.DataSourceContextHolder;
+import com.example.dbswitchingdemo.config.DataSourceProperties;
 import com.example.dbswitchingdemo.config.MultiRoutingDataSource;
 import com.example.dbswitchingdemo.dto.response.CommonDataResponse;
 import com.example.dbswitchingdemo.dto.response.CommonResponse;
@@ -24,6 +24,11 @@ import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * <p> Реализация сервиса для управления источниками данных. </p>
+ * <p> Этот сервис обеспечивает создание, переключение и закрытие источников данных.
+ * Также выполняет проверку соединения с базой данных перед созданием нового источника. </p>
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -31,12 +36,19 @@ public class DataSourceServiceImpl implements DataSourceService {
 
     public static final String JDBC_POSTGRESQL = "jdbc:postgresql://%s:%d/%s_%s_%d";
 
-    private final DataSourceConfig dataSourceConfig;
+    private final DataSourceProperties dataSourceProperties;
     private final MultiRoutingDataSource routingDataSource;
     private final DbSwitchLogRepository dbSwitchLogRepository;
 
     private final Map<String, DataSource> dataSources = new ConcurrentHashMap<>();
 
+    /**
+     * Инициализация сервиса.
+     * <p>
+     * Выполняется при старте приложения. Создаёт начальный источник данных
+     * для подключения по умолчанию.
+     * </p>
+     */
     @PostConstruct
     public void init() {
         String defaultHost = "localhost";
@@ -49,6 +61,9 @@ public class DataSourceServiceImpl implements DataSourceService {
         addDataSource(uniqueDbName, initialDataSource);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public CommonResponse createDataSource(String host, Integer port) {
         String uniqueDbName = createUniqueDbName(host, port);
@@ -79,6 +94,9 @@ public class DataSourceServiceImpl implements DataSourceService {
         }
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public CommonResponse switchDataSource(String name) {
         if (dataSources.containsKey(name)) {
@@ -97,6 +115,9 @@ public class DataSourceServiceImpl implements DataSourceService {
                 .build();
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public CommonResponse closeDataSource(String name) {
         DataSource dataSource = dataSources.remove(name);
@@ -110,32 +131,67 @@ public class DataSourceServiceImpl implements DataSourceService {
                 .build();
     }
 
+    /**
+     * Добавляет источник данных в карту источников и настраивает маршрутизацию.
+     *
+     * @param name       уникальное имя источника данных
+     * @param dataSource источник данных
+     */
     private void addDataSource(String name, DataSource dataSource) {
         dataSources.put(name, dataSource);
         routingDataSource.addDataSource(name, dataSource);
     }
 
+    /**
+     * Создаёт уникальное имя для источника данных на основе хоста и порта.
+     *
+     * @param host хост базы данных
+     * @param port порт базы данных
+     * @return уникальное имя для источника данных
+     */
     private String createUniqueDbName(String host, int port) {
-        String databaseName = dataSourceConfig.getName();
+        String databaseName = dataSourceProperties.getName();
         return String.format("%s_%s_%d", databaseName, host, port);
     }
 
+    /**
+     * Формирует URL JDBC для подключения к базе данных.
+     *
+     * @param host хост базы данных
+     * @param port порт базы данных
+     * @return сформированный URL JDBC
+     */
     private String buildJdbcUrl(String host, int port) {
-        String databaseName = dataSourceConfig.getName();
+        String databaseName = dataSourceProperties.getName();
         return String.format(JDBC_POSTGRESQL, host, port, databaseName, host, port);
     }
 
+    /**
+     * Создаёт экземпляр источника данных на основе переданного URL.
+     *
+     * @param url URL JDBC для подключения к базе данных
+     * @return созданный источник данных
+     */
     private DataSource createDataSourceInstance(String url) {
         return DataSourceBuilder.create()
                 .url(url)
-                .username(dataSourceConfig.getUsername())
-                .password(dataSourceConfig.getPassword())
-                .driverClassName(dataSourceConfig.getDriverClassName())
+                .username(dataSourceProperties.getUsername())
+                .password(dataSourceProperties.getPassword())
+                .driverClassName(dataSourceProperties.getDriverClassName())
                 .build();
     }
 
+    /**
+     * Проверяет соединение с базой данных по переданному URL.
+     *
+     * @param url URL JDBC для подключения к базе данных
+     * @return true, если соединение успешно, иначе false
+     */
     private boolean testDatabaseConnection(String url) {
-        try (Connection ignored = DriverManager.getConnection(url, dataSourceConfig.getUsername(), dataSourceConfig.getPassword())) {
+        try (Connection ignored = DriverManager.getConnection(
+                        url,
+                        dataSourceProperties.getUsername(),
+                        dataSourceProperties.getPassword())) {
             log.info("Connection is successfully established for '{}'", url);
             return true;
         } catch (SQLException e) {
@@ -144,12 +200,22 @@ public class DataSourceServiceImpl implements DataSourceService {
         }
     }
 
+    /**
+     * Логирует переключение источника данных, сохраняет время переключения в базу данных.
+     */
     private void logDataSourceSwitch() {
         DbSwitchLog log = new DbSwitchLog();
         log.setSwitchTime(LocalDateTime.now());
         dbSwitchLogRepository.save(log);
     }
 
+    /**
+     * Закрывает и удаляет указанный источник данных.
+     *
+     * @param name        имя источника данных
+     * @param dataSource источник данных
+     * @return объект {@link CommonResponse} с результатом операции
+     */
     private CommonResponse closeExistingDataSource(String name, DataSource dataSource) {
         try {
             if (dataSource instanceof AutoCloseable) {

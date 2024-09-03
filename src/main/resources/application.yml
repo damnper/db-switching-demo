@@ -1,0 +1,21 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: db-switch-demo
+
+  datasource:
+    url: jdbc:postgresql://localhost:5433/replica_localhost_5433
+    username: user
+    password: pass
+    driver-class-name: org.postgresql.Driver
+    name: replica
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+logging:
+  config: classpath:logback.xml
