@@ -1,8 +1,8 @@
 package com.example.dbswitchingdemo.config;
 
+import com.zaxxer.hikari.HikariDataSource;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -13,7 +13,7 @@ import java.util.Map;
 
 /**
  * Конфигурационный класс для настройки источников данных.
- * Определяет начальный источник данных и маршрутизатор для управления множественными источниками данных.
+ * Определяет начальный источник данных с использованием пула соединений Hikari и маршрутизатор для управления несколькими источниками данных.
  */
 @Getter
 @Configuration
@@ -23,18 +23,34 @@ public class DataSourceConfig {
     private final DataSourceProperties dataSourceProperties;
 
     /**
-     * Создает и настраивает начальный источник данных (DataSource).
-     *
-     * @return настроенный DataSource
+     * Создает бин для HikariDataSource, который будет использоваться для всех баз данных.
+     * @return настроенный HikariDataSource
      */
-    @Bean(name = "initialDataSource")
-    public DataSource initialDataSource() {
-        return DataSourceBuilder.create()
-                .url(dataSourceProperties.getUrl())
-                .username(dataSourceProperties.getUsername())
-                .password(dataSourceProperties.getPassword())
-                .driverClassName(dataSourceProperties.getDriverClassName())
-                .build();
+    @Bean
+    @Primary
+    public HikariDataSource hikariDataSource() {
+        HikariDataSource dataSource = new HikariDataSource();
+        dataSource.setJdbcUrl(dataSourceProperties.getUrl());
+        dataSource.setUsername(dataSourceProperties.getUsername());
+        dataSource.setPassword(dataSourceProperties.getPassword());
+        dataSource.setDriverClassName(dataSourceProperties.getDriverClassName());
+        dataSource.setMaximumPoolSize(10);
+        return dataSource;
+    }
+
+    /**
+     * Создает HikariDataSource для указанного URL базы данных.
+     * @param url URL подключения к базе данных
+     * @return настроенный HikariDataSource
+     */
+    public HikariDataSource createHikariDataSource(String url) {
+        HikariDataSource dataSource = new HikariDataSource();
+        dataSource.setJdbcUrl(url);
+        dataSource.setUsername(dataSourceProperties.getUsername());
+        dataSource.setPassword(dataSourceProperties.getPassword());
+        dataSource.setDriverClassName(dataSourceProperties.getDriverClassName());
+        dataSource.setMaximumPoolSize(10);
+        return dataSource;
     }
 
     /**
@@ -50,7 +66,7 @@ public class DataSourceConfig {
         MultiRoutingDataSource routingDataSource = new MultiRoutingDataSource();
 
         Map<Object, Object> targetDataSources = new HashMap<>();
-        targetDataSources.put("dbname_localhost_5433", initialDataSource);
+        targetDataSources.put("replica_localhost_5433", initialDataSource);
 
         routingDataSource.setTargetDataSources(targetDataSources);
         routingDataSource.setDefaultTargetDataSource(initialDataSource);

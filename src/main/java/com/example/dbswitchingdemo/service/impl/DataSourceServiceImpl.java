@@ -1,5 +1,6 @@
 package com.example.dbswitchingdemo.service.impl;
 
+import com.example.dbswitchingdemo.config.DataSourceConfig;
 import com.example.dbswitchingdemo.config.DataSourceContextHolder;
 import com.example.dbswitchingdemo.config.DataSourceProperties;
 import com.example.dbswitchingdemo.config.MultiRoutingDataSource;
@@ -12,7 +13,6 @@ import com.example.dbswitchingdemo.service.DataSourceService;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -37,6 +37,7 @@ public class DataSourceServiceImpl implements DataSourceService {
     public static final String JDBC_POSTGRESQL = "jdbc:postgresql://%s:%d/%s_%s_%d";
 
     private final DataSourceProperties dataSourceProperties;
+    private final DataSourceConfig dataSourceConfig;
     private final MultiRoutingDataSource routingDataSource;
     private final DbSwitchLogRepository dbSwitchLogRepository;
 
@@ -57,7 +58,7 @@ public class DataSourceServiceImpl implements DataSourceService {
         String uniqueDbName = createUniqueDbName(defaultHost, defaultPort);
         String url = buildJdbcUrl(defaultHost, defaultPort);
 
-        DataSource initialDataSource = createDataSourceInstance(url);
+        DataSource initialDataSource = dataSourceConfig.createHikariDataSource(url);
         addDataSource(uniqueDbName, initialDataSource);
     }
 
@@ -75,17 +76,15 @@ public class DataSourceServiceImpl implements DataSourceService {
         try {
             String testUrl = buildJdbcUrl(host, port);
             if (!testDatabaseConnection(testUrl)) {
-                return CommonResponse.builder()
-                        .status(HttpStatus.BAD_REQUEST.name())
+                return CommonResponse.builder().status(HttpStatus.BAD_REQUEST.name())
                         .message("Failed to connect to the database at '" + host + ":" + port + "'. Please check the database configuration.")
                         .build();
             }
 
-            DataSource newDataSource = createDataSourceInstance(testUrl);
+            DataSource newDataSource = dataSourceConfig.createHikariDataSource(testUrl);
             addDataSource(uniqueDbName, newDataSource);
 
-            return CommonResponse.builder()
-                    .status(HttpStatus.OK.name())
+            return CommonResponse.builder().status(HttpStatus.OK.name())
                     .message("DataSource '" + uniqueDbName + "' created successfully!")
                     .build();
         } catch (Exception e) {
@@ -164,21 +163,6 @@ public class DataSourceServiceImpl implements DataSourceService {
     private String buildJdbcUrl(String host, int port) {
         String databaseName = dataSourceProperties.getName();
         return String.format(JDBC_POSTGRESQL, host, port, databaseName, host, port);
-    }
-
-    /**
-     * Создаёт экземпляр источника данных на основе переданного URL.
-     *
-     * @param url URL JDBC для подключения к базе данных
-     * @return созданный источник данных
-     */
-    private DataSource createDataSourceInstance(String url) {
-        return DataSourceBuilder.create()
-                .url(url)
-                .username(dataSourceProperties.getUsername())
-                .password(dataSourceProperties.getPassword())
-                .driverClassName(dataSourceProperties.getDriverClassName())
-                .build();
     }
 
     /**
