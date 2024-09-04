@@ -7,13 +7,14 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 
-import javax.sql.DataSource;
 import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Конфигурационный класс для настройки источников данных.
- * Определяет начальный источник данных с использованием пула соединений Hikari и маршрутизатор для управления несколькими источниками данных.
+ * <p>Конфигурационный класс для настройки и управления источниками данных в приложении.</p>
+ * <p>Этот класс определяет и настраивает пул соединений HikariCP для источников данных,
+ * а также предоставляет механизм для маршрутизации запросов к различным базам данных с помощью
+ * {@link MultiRoutingDataSource}.</p>
  */
 @Getter
 @Configuration
@@ -23,25 +24,12 @@ public class DataSourceConfig {
     private final DataSourceProperties dataSourceProperties;
 
     /**
-     * Создает бин для HikariDataSource, который будет использоваться для всех баз данных.
-     * @return настроенный HikariDataSource
-     */
-    @Bean
-    @Primary
-    public HikariDataSource hikariDataSource() {
-        HikariDataSource dataSource = new HikariDataSource();
-        dataSource.setJdbcUrl(dataSourceProperties.getUrl());
-        dataSource.setUsername(dataSourceProperties.getUsername());
-        dataSource.setPassword(dataSourceProperties.getPassword());
-        dataSource.setDriverClassName(dataSourceProperties.getDriverClassName());
-        dataSource.setMaximumPoolSize(10);
-        return dataSource;
-    }
-
-    /**
-     * Создает HikariDataSource для указанного URL базы данных.
-     * @param url URL подключения к базе данных
-     * @return настроенный HikariDataSource
+     * <p>Создает и настраивает экземпляр {@link HikariDataSource} для подключения к базе данных по указанному URL.</p>
+     * <p>Источник данных использует параметры, указанные в {@link DataSourceProperties} для настройки аутентификации,
+     * а также драйвер, специфичный для базы данных.</p>
+     *
+     * @param url URL подключения к базе данных.
+     * @return настроенный экземпляр {@link HikariDataSource}.
      */
     public HikariDataSource createHikariDataSource(String url) {
         HikariDataSource dataSource = new HikariDataSource();
@@ -49,29 +37,45 @@ public class DataSourceConfig {
         dataSource.setUsername(dataSourceProperties.getUsername());
         dataSource.setPassword(dataSourceProperties.getPassword());
         dataSource.setDriverClassName(dataSourceProperties.getDriverClassName());
-        dataSource.setMaximumPoolSize(10);
         return dataSource;
     }
 
     /**
-     * Создает и настраивает MultiRoutingDataSource, который управляет маршрутизацией между различными источниками данных.
-     * Инициализирует его с начальным источником данных.
+     * <p>Создает и настраивает {@link MultiRoutingDataSource}, который управляет маршрутизацией запросов
+     * между несколькими источниками данных.</p>
+     * <p>Метод инициализирует маршрутизатор с "фиктивным" источником данных (H2 in-memory база),
+     * который используется по умолчанию до добавления реальных источников данных.</p>
      *
-     * @param initialDataSource начальный источник данных
-     * @return настроенный MultiRoutingDataSource
+     * @return настроенный {@link MultiRoutingDataSource}, готовый к использованию в приложении.
      */
     @Bean
     @Primary
-    public MultiRoutingDataSource multiRoutingDataSource(DataSource initialDataSource) {
+    public MultiRoutingDataSource multiRoutingDataSource() {
         MultiRoutingDataSource routingDataSource = new MultiRoutingDataSource();
-
         Map<Object, Object> targetDataSources = new HashMap<>();
-        targetDataSources.put("replica_localhost_5433", initialDataSource);
 
+        HikariDataSource fakeDataSource = getHikariDataSourceForFakeDB();
+
+        targetDataSources.put("fakeDataSource", fakeDataSource);
+
+        routingDataSource.setDefaultTargetDataSource(fakeDataSource);
         routingDataSource.setTargetDataSources(targetDataSources);
-        routingDataSource.setDefaultTargetDataSource(initialDataSource);
-
         routingDataSource.afterPropertiesSet();
+
         return routingDataSource;
+    }
+
+    /**
+     * <p>Создает HikariDataSource для "фиктивного" источника данных, который представляет собой H2 in-memory базу.</p>
+     * <p>Этот источник данных используется по умолчанию до добавления реальных источников данных в систему.</p>
+     *
+     * @return настроенный {@link HikariDataSource} для H2 in-memory базы данных.
+     */
+    private HikariDataSource getHikariDataSourceForFakeDB() {
+        HikariDataSource fakeDataSource  = new HikariDataSource();
+        fakeDataSource.setJdbcUrl("jdbc:h2:mem:fakeDB");
+        fakeDataSource.setUsername("fake");
+        fakeDataSource.setPassword("fake");
+        return fakeDataSource;
     }
 }

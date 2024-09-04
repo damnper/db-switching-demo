@@ -6,16 +6,22 @@ spring:
     name: db-switch-demo
 
   datasource:
-    url: jdbc:postgresql://localhost:5433/replica_localhost_5433
     username: user
     password: pass
     driver-class-name: org.postgresql.Driver
     name: replica
+    hikari:
+      maximum-pool-size: 10  # Увеличьте значение в зависимости от нагрузки
+      minimum-idle: 5        # Минимум свободных соединений
+      idle-timeout: 30000    # Таймаут для бездействующих соединений
+      max-lifetime: 600000   # Время жизни соединений
+      connection-timeout: 30000  # Таймаут для получения соединения
 
   jpa:
     hibernate:
       ddl-auto: update
     show-sql: true
+    open-in-view: false
 
 logging:
   config: classpath:logback.xml

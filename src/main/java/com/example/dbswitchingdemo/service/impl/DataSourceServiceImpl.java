@@ -10,6 +10,7 @@ import com.example.dbswitchingdemo.entity.DbSwitchLog;
 import com.example.dbswitchingdemo.exception.DataSourceExistException;
 import com.example.dbswitchingdemo.repo.DbSwitchLogRepository;
 import com.example.dbswitchingdemo.service.DataSourceService;
+import com.zaxxer.hikari.HikariDataSource;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +35,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 public class DataSourceServiceImpl implements DataSourceService {
 
+    private static final String FAKE_DATASOURCE_NAME = "fakeDataSource";
     public static final String JDBC_POSTGRESQL = "jdbc:postgresql://%s:%d/%s_%s_%d";
 
     private final DataSourceProperties dataSourceProperties;
@@ -43,23 +45,9 @@ public class DataSourceServiceImpl implements DataSourceService {
 
     private final Map<String, DataSource> dataSources = new ConcurrentHashMap<>();
 
-    /**
-     * Инициализация сервиса.
-     * <p>
-     * Выполняется при старте приложения. Создаёт начальный источник данных
-     * для подключения по умолчанию.
-     * </p>
-     */
     @PostConstruct
-    public void init() {
-        String defaultHost = "localhost";
-        int defaultPort = 5433;
-
-        String uniqueDbName = createUniqueDbName(defaultHost, defaultPort);
-        String url = buildJdbcUrl(defaultHost, defaultPort);
-
-        DataSource initialDataSource = dataSourceConfig.createHikariDataSource(url);
-        addDataSource(uniqueDbName, initialDataSource);
+    private void init() {
+        dataSources.put(FAKE_DATASOURCE_NAME, new HikariDataSource());
     }
 
     /**
@@ -81,7 +69,7 @@ public class DataSourceServiceImpl implements DataSourceService {
                         .build();
             }
 
-            DataSource newDataSource = dataSourceConfig.createHikariDataSource(testUrl);
+            HikariDataSource newDataSource = dataSourceConfig.createHikariDataSource(testUrl);
             addDataSource(uniqueDbName, newDataSource);
 
             return CommonResponse.builder().status(HttpStatus.OK.name())
@@ -89,7 +77,7 @@ public class DataSourceServiceImpl implements DataSourceService {
                     .build();
         } catch (Exception e) {
             log.error("Failed to create DataSource for host '{}' and port '{}'", host, port, e);
-            throw new RuntimeException("Failed to create DataSource.");
+            throw new RuntimeException("Failed to create DataSource '%s'".formatted(uniqueDbName));
         }
     }
 
@@ -101,6 +89,7 @@ public class DataSourceServiceImpl implements DataSourceService {
         if (dataSources.containsKey(name)) {
             DataSourceContextHolder.setDataSource(name);
             logDataSourceSwitch();
+
             return CommonDataResponse.builder()
                     .status(HttpStatus.OK.name())
                     .data(true)
@@ -137,6 +126,12 @@ public class DataSourceServiceImpl implements DataSourceService {
      * @param dataSource источник данных
      */
     private void addDataSource(String name, DataSource dataSource) {
+        if (dataSources.containsKey(FAKE_DATASOURCE_NAME)) {
+            dataSources.remove(FAKE_DATASOURCE_NAME);
+            routingDataSource.removeDataSource(FAKE_DATASOURCE_NAME);
+            log.info("Removed fake data source after adding the first real one.");
+        }
+
         dataSources.put(name, dataSource);
         routingDataSource.addDataSource(name, dataSource);
     }

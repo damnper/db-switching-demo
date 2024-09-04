@@ -17,12 +17,12 @@ skinparam component {
   FontColor black
 }
 
-title <b>Схема взаимодействия компонентов в системе переключения БД</b>
+title <b>Схема взаимодействия компонентов в системе переключения БД (с HikariCP)</b>
 center footer <i>Создано с использованием PlantUML</i>
 
 package "Конфигурация" <<Config>> {
     component "DataSourceConfig" as cfg <<Config>> {
-        interface "initialDataSource()" as iDS
+        interface "createHikariDataSource(url)" as chds
         interface "multiRoutingDataSource()" as mRDS
     }
 
@@ -67,8 +67,8 @@ dsi -[#6C8EBF]-|> repo : save(DbSwitchLog)
 dsi -[#6C8EBF]-|> db : testConnection(url)
 
 ' Конфигурация создает начальные компоненты
-cfg -[#6C8EBF]-|> iDS
-cfg -[#6C8EBF]-|> mRDS
+cfg -[#6C8EBF]-|> chds : createHikariDataSource(url)
+cfg -[#6C8EBF]-|> mRDS : multiRoutingDataSource()
 rds --> ads
 rds --> sTDS
 
