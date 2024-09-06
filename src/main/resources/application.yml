@@ -9,7 +9,7 @@ spring:
     username: user
     password: pass
     driver-class-name: org.postgresql.Driver
-    name: replica
+    name: postgres
     hikari:
       maximum-pool-size: 10  # Увеличьте значение в зависимости от нагрузки
       minimum-idle: 5        # Минимум свободных соединений

@@ -5,6 +5,6 @@ import lombok.Getter;
 
 @Getter
 @AllArgsConstructor
-public class DataSourceExistException extends RuntimeException {
+public class DataSourceFailedConnectionException extends RuntimeException {
     private final String message;
 }

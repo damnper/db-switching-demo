@@ -1,5 +1,6 @@
 package com.example.dbswitchingdemo.service;
 
+import com.example.dbswitchingdemo.dto.request.ClusterMemberDTO;
 import com.example.dbswitchingdemo.dto.response.CommonResponse;
 
 public interface DataSourceService {
@@ -11,31 +12,14 @@ public interface DataSourceService {
      * а затем создаёт и добавляет источник данных в карту источников.
      * </p>
      *
-     * @param host хост базы данных
-     * @param port порт базы данных
+     * @param clusterMemberDTO DTO, содержащее информацию о кластере и его членах
      * @return объект {@link CommonResponse} с результатом операции
      */
-    CommonResponse createDataSource(String host, Integer port);
+    CommonResponse createDataSources(ClusterMemberDTO clusterMemberDTO);
 
-    /**
-     * Переключает текущее подключение на указанный источник данных.
-     * <p>
-     * Выполняет логирование времени переключения.
-     * </p>
-     *
-     * @param name имя источника данных
-     * @return объект {@link CommonResponse} с результатом операции
-     */
-    CommonResponse switchDataSource(String name);
 
-    /**
-     * Закрывает указанный источник данных.
-     * <p>
-     * Удаляет источник данных из карты и освобождает его ресурсы.
-     * </p>
-     *
-     * @param name имя источника данных
-     * @return объект {@link CommonResponse} с результатом операции
-     */
-    CommonResponse closeDataSource(String name);
+    CommonResponse switchDataSource();
+
+
+    CommonResponse closeDataSource(ClusterMemberDTO clusterMemberDTO);
 }

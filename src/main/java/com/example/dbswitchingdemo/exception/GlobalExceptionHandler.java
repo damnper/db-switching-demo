@@ -17,17 +17,42 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 public class GlobalExceptionHandler {
 
     /**
-     * <p>Обработчик исключений {@link DataSourceExistException}.</p>
+     * <p>Обработчик исключений {@link DataSourceFailedConnectionException}.</p>
      *
-     * <p>Этот метод вызывается, когда возникает исключение, связанное с существованием
-     * источника данных. Возвращает HTTP статус 409 (CONFLICT) и сообщение об ошибке.</p>
+     * <p>Этот метод вызывается, когда возникает исключение, связанное с ошибкой
+     * подключения к базе данных. Возвращает HTTP статус 500 (INTERNAL_SERVER_ERROR) и сообщение об ошибке.</p>
      *
-     * @param ex исключение {@link DataSourceExistException}, содержащее информацию об ошибке
+     * @param ex исключение {@link DataSourceFailedConnectionException}, содержащее информацию об ошибке
      * @return объект {@link ResponseEntity}, содержащий {@link CommonResponse} с сообщением и статусом ошибки
      */
-    @ExceptionHandler(DataSourceExistException.class)
-    public ResponseEntity<CommonResponse> handleDataSourceExistException(DataSourceExistException ex) {
-        CommonResponse response = CommonResponse.builder().status(HttpStatus.CONFLICT.name())
+    @ExceptionHandler(DataSourceFailedConnectionException.class)
+    public ResponseEntity<CommonResponse> handleDataSourceFailedConnectionException(DataSourceFailedConnectionException ex) {
+        CommonResponse response = CommonResponse.builder().status(HttpStatus.INTERNAL_SERVER_ERROR.name())
+                .message(ex.getMessage())
+                .build();
+        return new ResponseEntity<>(response, HttpStatus.valueOf(response.getStatus()));
+    }
+
+    /**
+     * <p>Обработчик исключений {@link ResourceNotFound}.</p>
+     *
+     * <p>Этот метод вызывается, когда возникает исключение, связанное с отсутствием какого-либо ресурса.
+     * Возвращает HTTP статус 404 (NOT_FOUND) и сообщение об ошибке.</p>
+     *
+     * @param ex исключение {@link ResourceNotFound}, содержащее информацию об ошибке
+     * @return объект {@link ResponseEntity}, содержащий {@link CommonResponse} с сообщением и статусом ошибки
+     */
+    @ExceptionHandler(ResourceNotFound.class)
+    public ResponseEntity<CommonResponse> handleResourceNotFound(ResourceNotFound ex) {
+        CommonResponse response = CommonResponse.builder().status(HttpStatus.NOT_FOUND.name())
+                .message(ex.getMessage())
+                .build();
+        return new ResponseEntity<>(response, HttpStatus.valueOf(response.getStatus()));
+    }
+
+    @ExceptionHandler(LogSwitchFailedException.class)
+    public ResponseEntity<CommonResponse> handleLogSwitchFailedException(LogSwitchFailedException ex) {
+        CommonResponse response = CommonResponse.builder().status(HttpStatus.INTERNAL_SERVER_ERROR.name())
                 .message(ex.getMessage())
                 .build();
         return new ResponseEntity<>(response, HttpStatus.valueOf(response.getStatus()));

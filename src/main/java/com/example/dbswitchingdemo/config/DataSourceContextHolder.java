@@ -1,28 +1,42 @@
 package com.example.dbswitchingdemo.config;
 
+import com.example.dbswitchingdemo.dto.DataSourceContextDTO;
+
+import java.util.Optional;
+
 /**
  * Класс DataSourceContextHolder управляет текущим контекстом источника данных (DataSource) с использованием {@link ThreadLocal}.
  * Это позволяет динамически переключать источники данных в зависимости от текущего контекста потока.
+ * В качестве контекста используется {@link DataSourceContextDTO}, который содержит информацию о ключе источника данных и имени базы данных.
  */
 public class DataSourceContextHolder {
 
-    private static final ThreadLocal<String> contextHolder = new ThreadLocal<>();
+    private static final ThreadLocal<DataSourceContextDTO> contextHolder = new ThreadLocal<>();
 
     /**
-     * Устанавливает текущий источник данных для текущего потока.
+     * Устанавливает контекст источника данных для текущего потока.
      *
-     * @param dataSourceKey ключ источника данных, который будет использоваться
+     * @param dataSourceContextDTO объект {@link DataSourceContextDTO}, содержащий ключ источника данных и имя базы данных
      */
-    public static void setDataSource(String dataSourceKey) {
-        contextHolder.set(dataSourceKey);
+    public static void setDataSourceContext(DataSourceContextDTO dataSourceContextDTO) {
+        contextHolder.set(dataSourceContextDTO);
     }
 
     /**
-     * Возвращает текущий источник данных для текущего потока.
+     * Возвращает текущий контекст источника данных для текущего потока.
      *
-     * @return ключ текущего источника данных или {@code null}, если не установлен
+     * @return {@link Optional}, содержащий {@link DataSourceContextDTO}, если контекст установлен, или {@code Optional.empty()}, если контекста нет
      */
-    public static String getDataSource() {
-        return contextHolder.get();
+    public static Optional<DataSourceContextDTO> getDataSourceContext() {
+        return Optional.ofNullable(contextHolder.get());
+    }
+
+
+    /**
+     * Очищает контекст источника данных для текущего потока.
+     * Это полезно для предотвращения утечек данных и обеспечения корректного завершения работы с потоками.
+     */
+    public static void clearDataSourceContext() {
+        contextHolder.remove();
     }
 }

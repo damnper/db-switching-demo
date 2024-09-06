@@ -4,10 +4,17 @@ import com.example.dbswitchingdemo.config.DataSourceConfig;
 import com.example.dbswitchingdemo.config.DataSourceContextHolder;
 import com.example.dbswitchingdemo.config.DataSourceProperties;
 import com.example.dbswitchingdemo.config.MultiRoutingDataSource;
+import com.example.dbswitchingdemo.dto.DataSourceContextDTO;
+import com.example.dbswitchingdemo.dto.DataSourceInfoDTO;
+import com.example.dbswitchingdemo.dto.request.ClusterMemberDTO;
+import com.example.dbswitchingdemo.dto.request.ClusterMemberDTO.MemberDTO;
 import com.example.dbswitchingdemo.dto.response.CommonDataResponse;
 import com.example.dbswitchingdemo.dto.response.CommonResponse;
 import com.example.dbswitchingdemo.entity.DbSwitchLog;
-import com.example.dbswitchingdemo.exception.DataSourceExistException;
+import com.example.dbswitchingdemo.exception.DataSourceFailedConnectionException;
+import com.example.dbswitchingdemo.exception.DataSourceNotCloseException;
+import com.example.dbswitchingdemo.exception.LogSwitchFailedException;
+import com.example.dbswitchingdemo.exception.ResourceNotFound;
 import com.example.dbswitchingdemo.repo.DbSwitchLogRepository;
 import com.example.dbswitchingdemo.service.DataSourceService;
 import com.zaxxer.hikari.HikariDataSource;
@@ -22,8 +29,9 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 /**
  * <p> Реализация сервиса для управления источниками данных. </p>
@@ -36,116 +44,167 @@ import java.util.concurrent.ConcurrentHashMap;
 public class DataSourceServiceImpl implements DataSourceService {
 
     private static final String FAKE_DATASOURCE_NAME = "fakeDataSource";
-    public static final String JDBC_POSTGRESQL = "jdbc:postgresql://%s:%d/%s_%s_%d";
+    public static final String JDBC_POSTGRESQL = "jdbc:postgresql://%s:%d/%s";
 
     private final DataSourceProperties dataSourceProperties;
     private final DataSourceConfig dataSourceConfig;
     private final MultiRoutingDataSource routingDataSource;
     private final DbSwitchLogRepository dbSwitchLogRepository;
 
-    private final Map<String, DataSource> dataSources = new ConcurrentHashMap<>();
+    private final Map<String, DataSourceInfoDTO> dataSources = new ConcurrentHashMap<>();
 
     @PostConstruct
     private void init() {
-        dataSources.put(FAKE_DATASOURCE_NAME, new HikariDataSource());
+        dataSources.put(FAKE_DATASOURCE_NAME, new DataSourceInfoDTO(
+                new HikariDataSource(),
+                "fakeDataSourceKey",
+                "fakeDatabaseName",
+                "fakeRole") );
     }
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public CommonResponse createDataSource(String host, Integer port) {
-        String uniqueDbName = createUniqueDbName(host, port);
+    public CommonResponse createDataSources(ClusterMemberDTO clusterMemberDTO) {
+        List<MemberDTO> members = clusterMemberDTO.getMembers();
 
-        if (dataSources.containsKey(uniqueDbName)) {
-            throw new DataSourceExistException("DataSource '" + uniqueDbName + "' already exists!");
+        if (members.isEmpty()) {
+            return CommonResponse.builder().status(HttpStatus.BAD_REQUEST.name())
+                    .message("Cluster members list is empty.")
+                    .build();
         }
 
-        try {
-            String testUrl = buildJdbcUrl(host, port);
-            if (!testDatabaseConnection(testUrl)) {
-                return CommonResponse.builder().status(HttpStatus.BAD_REQUEST.name())
-                        .message("Failed to connect to the database at '" + host + ":" + port + "'. Please check the database configuration.")
-                        .build();
+        List<DataSourceInfoDTO> newDataSources = processMembers(members);
+
+        if (newDataSources.isEmpty()) {
+            return CommonResponse.builder().status(HttpStatus.NOT_MODIFIED.name()).build();
+        }
+
+        return CommonDataResponse.builder().status(HttpStatus.OK.name())
+                .message("Data sources created successfully for all valid cluster members!")
+                .data(newDataSources.stream().map(DataSourceInfoDTO::getDataSourceKey).toList())
+                .build();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public CommonResponse switchDataSource() {
+        Map.Entry<String, DataSourceInfoDTO> leaderEntry = dataSources.entrySet().stream()
+                .filter(entry -> "leader".equals(entry.getValue().getRole()))
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFound("Leader not found"));
+
+        String leaderDataSourceKey = leaderEntry.getKey();
+        String leaderDatabaseName = leaderEntry.getValue().getDatabaseName();
+
+        DataSourceContextDTO currentContext = DataSourceContextHolder.getDataSourceContext()
+                .orElse(new DataSourceContextDTO(leaderDataSourceKey, leaderDatabaseName));
+
+        if (currentContext.dataSourceKey().equals(leaderDataSourceKey)){
+            Map.Entry<String, DataSourceInfoDTO> replicaEntry = dataSources.entrySet().stream()
+                    .filter(entry -> "replica".equals(entry.getValue().getRole()))
+                    .findFirst()
+                    .orElseThrow(() -> new ResourceNotFound("No replica found to switch to."));
+
+            String replicaName = replicaEntry.getKey();
+            String replicaDatabaseName = replicaEntry.getValue().getDatabaseName();
+
+            DataSourceContextHolder.setDataSourceContext(new DataSourceContextDTO(replicaName, replicaDatabaseName));
+            Optional<DataSourceContextDTO> newSourceContext = DataSourceContextHolder.getDataSourceContext();
+
+            newSourceContext.ifPresent(dataSourceContextDTO -> logDataSourceSwitch(dataSourceContextDTO.dataSourceKey()));
+
+            return CommonDataResponse.builder().status(HttpStatus.OK.name()).data(true)
+                    .message("Switched to replica DataSource '" + replicaName + "' successfully.")
+                    .build();
+        }
+
+        return CommonDataResponse.builder().status(HttpStatus.OK.name()).data(true)
+                .message("Already connected to replica DataSource '" + currentContext.dataSourceKey() + "'.")
+                .build();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public CommonResponse closeDataSource(ClusterMemberDTO clusterMemberDTO) {
+        List<DataSourceInfoDTO> closedDataSources = new ArrayList<>();
+        List<MemberDTO> members = clusterMemberDTO.getMembers();
+
+        Set<String> memberNames = members.stream()
+                .map(this::buildUniqueDataSourceKey)
+                .collect(Collectors.toSet());
+
+        Iterator<Map.Entry<String, DataSourceInfoDTO>> iterator = dataSources.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<String, DataSourceInfoDTO> entry = iterator.next();
+            String dataSourceName = entry.getKey();
+
+            if (!memberNames.contains(dataSourceName)) {
+                DataSourceInfoDTO removedDataSourceInfo = entry.getValue();
+                DataSource removedDataSource = removedDataSourceInfo.getDataSource();
+                closeExistingDataSource(removedDataSource);
+
+                closedDataSources.add(removedDataSourceInfo);
+                iterator.remove();
+            }
+        }
+
+        if (closedDataSources.isEmpty()) {
+            return CommonResponse.builder().status(HttpStatus.NOT_MODIFIED.name())
+                    .message("No DataSources were closed as all are up-to-date.")
+                    .build();
+        }
+
+        return CommonDataResponse.builder().status(HttpStatus.OK.name())
+                .message("DataSources closed successfully.")
+                .data(closedDataSources.stream().map(DataSourceInfoDTO::getDataSourceKey).toList())
+                .build();
+    }
+
+    private List<DataSourceInfoDTO> processMembers(List<MemberDTO> members) {
+        List<DataSourceInfoDTO> newDataSources = new ArrayList<>();
+
+        for (MemberDTO member : members) {
+            String dataSourceKey = buildUniqueDataSourceKey(member);
+            if (dataSources.containsKey(dataSourceKey) &&
+                    member.getRole().equals(dataSources.get(dataSourceKey).getRole())) {
+                log.info("DataSource '{}' already exists, skipping creation.", dataSourceKey);
+                continue;
             }
 
-            HikariDataSource newDataSource = dataSourceConfig.createHikariDataSource(testUrl);
-            addDataSource(uniqueDbName, newDataSource);
-
-            return CommonResponse.builder().status(HttpStatus.OK.name())
-                    .message("DataSource '" + uniqueDbName + "' created successfully!")
-                    .build();
-        } catch (Exception e) {
-            log.error("Failed to create DataSource for host '{}' and port '{}'", host, port, e);
-            throw new RuntimeException("Failed to create DataSource '%s'".formatted(uniqueDbName));
-        }
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public CommonResponse switchDataSource(String name) {
-        if (dataSources.containsKey(name)) {
-            DataSourceContextHolder.setDataSource(name);
-            logDataSourceSwitch();
-
-            return CommonDataResponse.builder()
-                    .status(HttpStatus.OK.name())
-                    .data(true)
-                    .message("Switched to DataSource '" + name + "' successfully.")
-                    .build();
-        }
-        return CommonDataResponse.builder()
-                .status(HttpStatus.NOT_FOUND.name())
-                .data(false)
-                .message("DataSource '" + name + "' not found.")
-                .build();
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public CommonResponse closeDataSource(String name) {
-        DataSource dataSource = dataSources.remove(name);
-        if (dataSource != null) {
-            return closeExistingDataSource(name, dataSource);
-        }
-        return CommonDataResponse.builder()
-                .status(HttpStatus.NOT_FOUND.name())
-                .data(false)
-                .message("DataSource '" + name + "' not found.")
-                .build();
-    }
-
-    /**
-     * Добавляет источник данных в карту источников и настраивает маршрутизацию.
-     *
-     * @param name       уникальное имя источника данных
-     * @param dataSource источник данных
-     */
-    private void addDataSource(String name, DataSource dataSource) {
-        if (dataSources.containsKey(FAKE_DATASOURCE_NAME)) {
-            dataSources.remove(FAKE_DATASOURCE_NAME);
-            routingDataSource.removeDataSource(FAKE_DATASOURCE_NAME);
-            log.info("Removed fake data source after adding the first real one.");
+            try {
+                DataSourceInfoDTO newDataSource = createAndAddDataSource(member, dataSourceKey, dataSourceProperties.getName());
+                newDataSources.add(newDataSource);
+            } catch (DataSourceFailedConnectionException e) {
+                log.error("Error creating DataSource: {}", e.getMessage());
+            }
         }
 
-        dataSources.put(name, dataSource);
-        routingDataSource.addDataSource(name, dataSource);
+        return newDataSources;
     }
 
-    /**
-     * Создаёт уникальное имя для источника данных на основе хоста и порта.
-     *
-     * @param host хост базы данных
-     * @param port порт базы данных
-     * @return уникальное имя для источника данных
-     */
-    private String createUniqueDbName(String host, int port) {
-        String databaseName = dataSourceProperties.getName();
-        return String.format("%s_%s_%d", databaseName, host, port);
+    private DataSourceInfoDTO createAndAddDataSource(MemberDTO member, String dataSourceKey, String databaseName) {
+
+        String url = buildJdbcUrl(member.getHost(), member.getPort());
+
+        if (!testDatabaseConnection(url)) {
+            log.warn("Failed to connect to the database at '{}:{}', skipping creation for this node.", member.getHost(), member.getPort());
+        }
+
+        HikariDataSource newDataSource = dataSourceConfig.createHikariDataSource(url);
+        DataSourceInfoDTO dataSourceInfoDTO = addDataSource(dataSourceKey, databaseName, member.getRole(), newDataSource);
+
+        log.info("DataSource '{}' created successfully!", dataSourceKey);
+        return dataSourceInfoDTO;
+    }
+
+    private String buildUniqueDataSourceKey(MemberDTO member) {
+        return member.getHost() + ":" + member.getPort();
     }
 
     /**
@@ -157,7 +216,7 @@ public class DataSourceServiceImpl implements DataSourceService {
      */
     private String buildJdbcUrl(String host, int port) {
         String databaseName = dataSourceProperties.getName();
-        return String.format(JDBC_POSTGRESQL, host, port, databaseName, host, port);
+        return String.format(JDBC_POSTGRESQL, host, port, databaseName);
     }
 
     /**
@@ -180,38 +239,44 @@ public class DataSourceServiceImpl implements DataSourceService {
     }
 
     /**
+     * Добавляет источник данных в карту источников и настраивает маршрутизацию.
+     *
+     * @param dataSourceKey       уникальное имя источника данных
+     * @param dataSource источник данных
+     */
+    private DataSourceInfoDTO addDataSource(String dataSourceKey, String databaseName, String role, HikariDataSource dataSource) {
+        dataSources.put(dataSourceKey, new DataSourceInfoDTO(dataSource, dataSourceKey, databaseName, role));
+        DataSourceInfoDTO newDataSource = dataSources.get(dataSourceKey);
+        routingDataSource.addDataSource(databaseName, dataSource);
+        return newDataSource;
+    }
+
+    /**
      * Логирует переключение источника данных, сохраняет время переключения в базу данных.
      */
-    private void logDataSourceSwitch() {
-        DbSwitchLog log = new DbSwitchLog();
-        log.setSwitchTime(LocalDateTime.now());
-        dbSwitchLogRepository.save(log);
+    private void logDataSourceSwitch(String dataSourceName) {
+        try {
+            dbSwitchLogRepository.save(DbSwitchLog.builder()
+                    .switchTime(LocalDateTime.now())
+                    .build());
+            log.info("Switching data source to: {}", dataSourceName);
+        } catch (Exception e) {
+            throw new LogSwitchFailedException("Error while switching data source: " + dataSourceName);
+        }
     }
 
     /**
      * Закрывает и удаляет указанный источник данных.
      *
-     * @param name        имя источника данных
      * @param dataSource источник данных
-     * @return объект {@link CommonResponse} с результатом операции
      */
-    private CommonResponse closeExistingDataSource(String name, DataSource dataSource) {
-        try {
-            if (dataSource instanceof AutoCloseable) {
+    private void closeExistingDataSource(DataSource dataSource) {
+        if (dataSource instanceof AutoCloseable) {
+            try {
                 ((AutoCloseable) dataSource).close();
+            } catch (Exception e) {
+                throw new DataSourceNotCloseException("Error while closing data source: " + e.getMessage());
             }
-            return CommonDataResponse.builder()
-                    .status(HttpStatus.OK.name())
-                    .data(true)
-                    .message("DataSource '" + name + "' closed successfully.")
-                    .build();
-        } catch (Exception e) {
-            log.error("Failed to close DataSource '{}'", name, e);
-            return CommonDataResponse.builder()
-                    .status(HttpStatus.INTERNAL_SERVER_ERROR.name())
-                    .data(false)
-                    .message("Failed to close DataSource '" + name + "'.")
-                    .build();
         }
     }
 }

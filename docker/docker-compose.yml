@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   replica-db0:
     image: postgres:latest
@@ -5,11 +7,12 @@ services:
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: pass
-      POSTGRES_DB: replica_localhost_5433
+      POSTGRES_DB: postgres
     ports:
       - "5433:5432"
     volumes:
       - replica-db0-data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     networks:
       - db-network
 
@@ -19,11 +22,12 @@ services:
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: pass
-      POSTGRES_DB: replica_localhost_5434
+      POSTGRES_DB: postgres
     ports:
       - "5434:5432"
     volumes:
       - replica-db1-data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     networks:
       - db-network
 
@@ -33,11 +37,12 @@ services:
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: pass
-      POSTGRES_DB: replica_localhost_5435
+      POSTGRES_DB: postgres
     ports:
       - "5435:5432"
     volumes:
       - replica-db2-data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     networks:
       - db-network
 
@@ -47,11 +52,12 @@ services:
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: pass
-      POSTGRES_DB: replica_localhost_5436
+      POSTGRES_DB: postgres
     ports:
       - "5436:5432"
     volumes:
       - replica-db3-data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     networks:
       - db-network
 
@@ -61,11 +67,12 @@ services:
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: pass
-      POSTGRES_DB: replica_localhost_5437
+      POSTGRES_DB: postgres
     ports:
       - "5437:5432"
     volumes:
       - replica-db4-data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     networks:
       - db-network
 

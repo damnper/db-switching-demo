@@ -1,5 +1,6 @@
 package com.example.dbswitchingdemo.config;
 
+import com.example.dbswitchingdemo.dto.DataSourceContextDTO;
 import io.micrometer.common.lang.NonNullApi;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,25 +30,27 @@ public class MultiRoutingDataSource extends AbstractRoutingDataSource {
 
     /**
      * Определяет текущий ключ источника данных, который будет использоваться для маршрутизации запросов.
-     * <p>Этот метод извлекает ключ источника данных из {@link DataSourceContextHolder}, который
-     * содержит информацию о текущем источнике данных, основанную на контексте выполнения.</p>
+     * <p>Этот метод извлекает имя базы данных из {@link DataSourceContextHolder}, который
+     * содержит информацию о текущем контексте источника данных, основанную на контексте выполнения.</p>
      *
-     * @return текущий ключ источника данных для маршрутизации
+     * @return имя текущей базы данных для маршрутизации
      */
     @Override
     protected Object determineCurrentLookupKey() {
-        return DataSourceContextHolder.getDataSource();
+        return DataSourceContextHolder.getDataSourceContext()
+                .map(DataSourceContextDTO::databaseName)
+                .orElse(null);
     }
 
     /**
      * Устанавливает целевые источники данных, которые будут использоваться для маршрутизации запросов.
-     * <p>Этот метод принимает карту источников данных, где ключ — это имя источника данных, а значение — это
+     * <p>Этот метод принимает карту источников данных, где ключ — это имя базы данных, а значение — это
      * {@link DataSource}, который представляет собой соединение с конкретной базой данных.</p>
      *
      * <p>После установки источников данных метод вызывает суперклассовую реализацию для обновления конфигурации
      * маршрутизатора с новыми данными.</p>
      *
-     * @param targetDataSources карта целевых источников данных, где ключ — это имя источника, а значение — {@link DataSource}
+     * @param targetDataSources карта целевых источников данных, где ключ — это имя базы данных, а значение — {@link DataSource}
      */
     @Override
     public void setTargetDataSources(Map<Object, Object> targetDataSources) {
@@ -62,11 +65,11 @@ public class MultiRoutingDataSource extends AbstractRoutingDataSource {
      * После добавления нового источника данных вызов {@link #afterPropertiesSet()} обновляет настройки
      * маршрутизации для правильной работы с новыми источниками.</p>
      *
-     * @param key ключ (имя) нового источника данных
+     * @param databaseName имя новой базы данных
      * @param dataSource новый {@link DataSource}, который необходимо добавить
      */
-    public void addDataSource(String key, DataSource dataSource) {
-        this.targetDataSources.put(key, dataSource);
+    public void addDataSource(String databaseName, DataSource dataSource) {
+        this.targetDataSources.put(databaseName, dataSource);
         super.setTargetDataSources(this.targetDataSources);
         super.afterPropertiesSet();
     }
@@ -76,12 +79,12 @@ public class MultiRoutingDataSource extends AbstractRoutingDataSource {
      * <p>После удаления источника данных, метод вызывает {@link #afterPropertiesSet()} для обновления
      * конфигурации маршрутизации.</p>
      *
-     * @param dataSourceKey ключ (имя) источника данных, который необходимо удалить
+     * @param databaseName имя базы данных, которую необходимо удалить
      */
-    public void removeDataSource(String dataSourceKey) {
-        this.targetDataSources.remove(dataSourceKey);
+    public void removeDataSource(String databaseName) {
+        this.targetDataSources.remove(databaseName);
         setTargetDataSources(this.targetDataSources);
         afterPropertiesSet();
-        log.info("Removed data source: {}", dataSourceKey);
+        log.info("Removed data source: {}", databaseName);
     }
 }

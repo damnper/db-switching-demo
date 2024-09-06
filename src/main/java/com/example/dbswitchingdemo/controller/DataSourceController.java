@@ -1,5 +1,6 @@
 package com.example.dbswitchingdemo.controller;
 
+import com.example.dbswitchingdemo.dto.request.ClusterMemberDTO;
 import com.example.dbswitchingdemo.dto.response.CommonResponse;
 import com.example.dbswitchingdemo.service.DataSourceService;
 import lombok.RequiredArgsConstructor;
@@ -26,30 +27,19 @@ public class DataSourceController {
      * и возвращает результат операции.
      * </p>
      *
-     * @param host хост базы данных
-     * @param port порт базы данных
+     * @param clusterMemberDTO DTO с информацией о членах кластера
      * @return {@link ResponseEntity} с результатом операции и соответствующим HTTP-статусом
      */
     @PostMapping("/create")
-    public ResponseEntity<CommonResponse> createDataSource(@RequestParam String host,
-                                                           @RequestParam Integer port) {
-        CommonResponse response = dataSourceService.createDataSource(host, port);
+    public ResponseEntity<CommonResponse> createDataSource(@RequestBody ClusterMemberDTO clusterMemberDTO) {
+        CommonResponse response = dataSourceService.createDataSources(clusterMemberDTO);
         return new ResponseEntity<>(response, HttpStatus.valueOf(response.getStatus()));
     }
 
-    /**
-     * Закрывает существующий источник данных по его имени.
-     * <p>
-     * Принимает имя источника данных в качестве параметра запроса, закрывает его
-     * и возвращает результат операции.
-     * </p>
-     *
-     * @param name имя источника данных, который нужно закрыть
-     * @return {@link ResponseEntity} с результатом операции и соответствующим HTTP-статусом
-     */
+
     @DeleteMapping("/close")
-    public ResponseEntity<CommonResponse> closeDataSource(@RequestParam String name) {
-        CommonResponse response = dataSourceService.closeDataSource(name);
+    public ResponseEntity<CommonResponse> closeDataSource(@RequestBody ClusterMemberDTO clusterMemberDTO) {
+        CommonResponse response = dataSourceService.closeDataSource(clusterMemberDTO);
         return new ResponseEntity<>(response, HttpStatus.valueOf(response.getStatus()));
     }
 }
