@@ -51,18 +51,18 @@ public class DataSourceConfig {
     @Bean
     @Primary
     public MultiRoutingDataSource multiRoutingDataSource() {
-        MultiRoutingDataSource routingDataSource = new MultiRoutingDataSource();
+        MultiRoutingDataSource dsMultiRouting = new MultiRoutingDataSource();
         Map<Object, Object> targetDataSources = new HashMap<>();
 
-        HikariDataSource fakeDataSource = getHikariDataSourceForFakeDB();
+        HikariDataSource dsFake = getHikariDataSourceForFakeDB();
 
-        targetDataSources.put("fakeDataSource", fakeDataSource);
+        targetDataSources.put("fakeDatabaseName", dsFake);
 
-        routingDataSource.setDefaultTargetDataSource(fakeDataSource);
-        routingDataSource.setTargetDataSources(targetDataSources);
-        routingDataSource.afterPropertiesSet();
+        dsMultiRouting.setDefaultTargetDataSource(dsFake);
+        dsMultiRouting.setTargetDataSources(targetDataSources);
+        dsMultiRouting.afterPropertiesSet();
 
-        return routingDataSource;
+        return dsMultiRouting;
     }
 
     /**

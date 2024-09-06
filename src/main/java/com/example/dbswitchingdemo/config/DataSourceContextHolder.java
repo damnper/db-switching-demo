@@ -11,7 +11,7 @@ import java.util.Optional;
  */
 public class DataSourceContextHolder {
 
-    private static final ThreadLocal<DataSourceContextDTO> contextHolder = new ThreadLocal<>();
+    private static DataSourceContextDTO contextHolder = null;
 
     /**
      * Устанавливает контекст источника данных для текущего потока.
@@ -19,7 +19,7 @@ public class DataSourceContextHolder {
      * @param dataSourceContextDTO объект {@link DataSourceContextDTO}, содержащий ключ источника данных и имя базы данных
      */
     public static void setDataSourceContext(DataSourceContextDTO dataSourceContextDTO) {
-        contextHolder.set(dataSourceContextDTO);
+        contextHolder = dataSourceContextDTO;
     }
 
     /**
@@ -28,7 +28,7 @@ public class DataSourceContextHolder {
      * @return {@link Optional}, содержащий {@link DataSourceContextDTO}, если контекст установлен, или {@code Optional.empty()}, если контекста нет
      */
     public static Optional<DataSourceContextDTO> getDataSourceContext() {
-        return Optional.ofNullable(contextHolder.get());
+        return Optional.ofNullable(contextHolder);
     }
 
 
@@ -37,6 +37,6 @@ public class DataSourceContextHolder {
      * Это полезно для предотвращения утечек данных и обеспечения корректного завершения работы с потоками.
      */
     public static void clearDataSourceContext() {
-        contextHolder.remove();
+        contextHolder = null;
     }
 }

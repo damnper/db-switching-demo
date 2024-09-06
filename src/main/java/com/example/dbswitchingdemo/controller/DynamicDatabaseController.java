@@ -2,7 +2,7 @@ package com.example.dbswitchingdemo.controller;
 
 import com.example.dbswitchingdemo.dto.request.ClusterMemberDTO;
 import com.example.dbswitchingdemo.dto.response.CommonResponse;
-import com.example.dbswitchingdemo.service.DataSourceService;
+import com.example.dbswitchingdemo.service.DynamicDatabaseService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -14,11 +14,11 @@ import org.springframework.web.bind.annotation.*;
  * и закрытия существующего источника данных. </p>
  */
 @RestController
-@RequestMapping("/data-source/")
+@RequestMapping("/api/v1/")
 @RequiredArgsConstructor
-public class DataSourceController {
+public class DynamicDatabaseController {
 
-    private final DataSourceService dataSourceService;
+    private final DynamicDatabaseService dataSourceService;
 
     /**
      * Создает новый источник данных на основе предоставленных параметров хоста и порта.
@@ -30,16 +30,26 @@ public class DataSourceController {
      * @param clusterMemberDTO DTO с информацией о членах кластера
      * @return {@link ResponseEntity} с результатом операции и соответствующим HTTP-статусом
      */
-    @PostMapping("/create")
+    @PostMapping("/refresh")
     public ResponseEntity<CommonResponse> createDataSource(@RequestBody ClusterMemberDTO clusterMemberDTO) {
-        CommonResponse response = dataSourceService.createDataSources(clusterMemberDTO);
+        CommonResponse response = dataSourceService.refresh(clusterMemberDTO);
         return new ResponseEntity<>(response, HttpStatus.valueOf(response.getStatus()));
     }
 
+    /**
+     * Переключает leader источник данных на replica.
+     *
+     * @return {@link ResponseEntity} с результатом операции и соответствующим HTTP-статусом
+     */
+    @PostMapping("/switch")
+    public ResponseEntity<CommonResponse> switchDataSource() {
+        CommonResponse response = dataSourceService.change();
+        return new ResponseEntity<>(response, HttpStatus.valueOf(response.getStatus()));
+    }
 
     @DeleteMapping("/close")
     public ResponseEntity<CommonResponse> closeDataSource(@RequestBody ClusterMemberDTO clusterMemberDTO) {
-        CommonResponse response = dataSourceService.closeDataSource(clusterMemberDTO);
+        CommonResponse response = dataSourceService.close(clusterMemberDTO);
         return new ResponseEntity<>(response, HttpStatus.valueOf(response.getStatus()));
     }
 }

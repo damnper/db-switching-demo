@@ -2,6 +2,7 @@ package com.example.dbswitchingdemo.config;
 
 import com.example.dbswitchingdemo.dto.DataSourceContextDTO;
 import io.micrometer.common.lang.NonNullApi;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.datasource.lookup.AbstractRoutingDataSource;
@@ -21,6 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>Основное использование данного класса заключается в создании мульти-тенантной архитектуры
  * или других сценариев, где требуется работать с несколькими базами данных в одном приложении.</p>
  */
+@Getter
 @NonNullApi
 @RequiredArgsConstructor
 @Slf4j
@@ -65,11 +67,11 @@ public class MultiRoutingDataSource extends AbstractRoutingDataSource {
      * После добавления нового источника данных вызов {@link #afterPropertiesSet()} обновляет настройки
      * маршрутизации для правильной работы с новыми источниками.</p>
      *
-     * @param databaseName имя новой базы данных
-     * @param dataSource новый {@link DataSource}, который необходимо добавить
+     * @param dbName имя новой базы данных
+     * @param ds новый {@link DataSource}, который необходимо добавить
      */
-    public void addDataSource(String databaseName, DataSource dataSource) {
-        this.targetDataSources.put(databaseName, dataSource);
+    public void addDataSource(String dbName, DataSource ds) {
+        this.targetDataSources.put(dbName, ds);
         super.setTargetDataSources(this.targetDataSources);
         super.afterPropertiesSet();
     }
@@ -79,12 +81,13 @@ public class MultiRoutingDataSource extends AbstractRoutingDataSource {
      * <p>После удаления источника данных, метод вызывает {@link #afterPropertiesSet()} для обновления
      * конфигурации маршрутизации.</p>
      *
-     * @param databaseName имя базы данных, которую необходимо удалить
+     * @param dbName имя базы данных, которую необходимо удалить
+     * @param dsKey имя уникального ключа, для логирования удаления
      */
-    public void removeDataSource(String databaseName) {
-        this.targetDataSources.remove(databaseName);
+    public void removeDataSource(String dbName,String dsKey) {
+        this.targetDataSources.remove(dbName);
         setTargetDataSources(this.targetDataSources);
         afterPropertiesSet();
-        log.info("Removed data source: {}", databaseName);
+        log.info("Removed data source by key: {}", dsKey);
     }
 }

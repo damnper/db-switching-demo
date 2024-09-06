@@ -6,7 +6,7 @@ import lombok.Data;
 
 @Data
 @AllArgsConstructor
-public class DataSourceInfoDTO {
+public class DataSourceDTO {
     private HikariDataSource dataSource;
     private String dataSourceKey;
     private String databaseName;
