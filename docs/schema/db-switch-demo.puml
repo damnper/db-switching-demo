@@ -1,75 +1,50 @@
 @startuml
-skinparam backgroundColor #F9F9F9
-skinparam componentStyle rectangle
-skinparam shadowing false
-skinparam roundcorner 20
-skinparam ArrowColor #6C8EBF
-skinparam ArrowThickness 2
+skinparam backgroundColor #FFFFFF
+skinparam ArrowColor #005792
+skinparam ActorFontColor #333333
+skinparam ParticipantBackgroundColor #D6EAF8
+skinparam ParticipantBorderColor #5DADE2
+skinparam SequenceBoxBackgroundColor #EAECEE
+skinparam SequenceBoxBorderColor #5DADE2
+skinparam SequenceArrowColor #1ABC9C
+skinparam SequenceDividerFontSize 16
 
-' Цветовые акценты
-skinparam component {
-  BackgroundColor<<Config>> #FAD7A0
-  BackgroundColor<<Service>> #AED6F1
-  BackgroundColor<<Controller>> #A9DFBF
-  BackgroundColor<<Repository>> #F5B7B1
-  BackgroundColor<<Database>> #D5DBDB
-  BorderColor black
-  FontColor black
-}
+title <b>Алгоритм работы системы переключения баз данных</b>
+caption Оптимизация нагрузки на базы данных (Leader и Replica)
 
-title <b>Схема взаимодействия компонентов в системе переключения БД (с HikariCP)</b>
-center footer <i>Создано с использованием PlantUML</i>
+actor "Пользователь" as User #28B463
 
-package "Конфигурация" <<Config>> {
-    component "DataSourceConfig" as cfg <<Config>> {
-        interface "createHikariDataSource(url)" as chds
-        interface "multiRoutingDataSource()" as mRDS
-    }
+box "Приложение" #EAECEE
+    participant "dsActivePool\n(Пул источников данных)" as Pool
+    participant "Метод init()" as Init #58D68D
+    participant "Метод close()" as Close #F1948A
+    participant "Метод refresh()" as Refresh #F9E79F
+    participant "Метод change()" as Change #5DADE2
+end box
 
-    component "MultiRoutingDataSource" as rds <<Config>> {
-        interface "addDataSource()" as ads
-        interface "setTargetDataSources()" as sTDS
-    }
-}
+== Инициализация приложения ==
 
-package "Сервис" <<Service>> {
-    component "DataSourceServiceImpl" as dsi <<Service>> {
-        interface "createDataSource()" as cds
-        interface "switchDataSource()" as swds
-        interface "closeDataSource()" as clsds
-    }
+User -> Init: Старт приложения
+Init -> Pool: Инициализация in-memory БД (H2)
 
-    component "DataSourceContextHolder" as dch <<Service>> {
-        interface "setDataSource()" as sds
-        interface "getDataSource()" as gds
-    }
-}
+== Закрытие неактуальных DataSource ==
 
-package "Контроллеры" <<Controller>> {
-    component "DatabaseSwitchController" as dbc <<Controller>>
-    component "DataSourceController" as dcc <<Controller>>
-}
+User -> Close: Закрытие старых DataSource
+Close -> Pool: Закрытие H2 и других неактуальных DataSource
 
-package "Логи и база данных" {
-    component "DbSwitchLogRepository" as repo <<Repository>>
-    database "Database" as db <<Database>>
-}
+== Создание новых DataSource ==
 
-' Контроллеры взаимодействуют с сервисами
-dbc -[#6C8EBF]-|> dsi : switchDataSource(name)
-dcc -[#6C8EBF]-|> dsi : createDataSource(host, port)\ncloseDataSource(name)
+User -> Refresh: Обновление DataSource
+Refresh -> Pool: Создание новых HikariDataSource для Leader и Replica
 
-' Сервисы взаимодействуют с контекстом данных и маршрутизацией
-dsi -[#6C8EBF]-|> dch : setDataSource(name)
-dsi -[#6C8EBF]-|> rds : addDataSource(name, DataSource)
-dsi -[#6C8EBF]-|> rds : setTargetDataSources()
-dsi -[#6C8EBF]-|> repo : save(DbSwitchLog)
-dsi -[#6C8EBF]-|> db : testConnection(url)
+== Переключение DataSource ==
 
-' Конфигурация создает начальные компоненты
-cfg -[#6C8EBF]-|> chds : createHikariDataSource(url)
-cfg -[#6C8EBF]-|> mRDS : multiRoutingDataSource()
-rds --> ads
-rds --> sTDS
+User -> Change: Переключение на Replica для чтения
+Change -> Pool: Переключение с Leader на Replica (DataSource)
+
+== Чтение данных ==
+
+User -> Pool: Чтение данных из Replica
+Pool --> User: Возвращает данные
 
 @enduml
