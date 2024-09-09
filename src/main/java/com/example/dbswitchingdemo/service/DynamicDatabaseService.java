@@ -9,25 +9,25 @@ import com.example.dbswitchingdemo.dto.response.CommonResponse;
 public interface DynamicDatabaseService {
 
     /**
-     * Обновляет список источников данных на основе новых данных о кластере.
+     * Обновляет пул источников данных на основе новых членов кластера.
      *
-     * @param clusterMemberDTO DTO с данными о членах кластера
-     * @return результат выполнения обновления в виде CommonResponse
+     * @param clusterMemberDTO DTO, содержащий список новых членов кластера
+     * @return объект {@link CommonResponse}, представляющий результат операции
      */
     CommonResponse refresh(ClusterMemberDTO clusterMemberDTO);
 
     /**
-     * Переключает текущий источник данных на реплику, если подключен к лидеру.
+     * Переключает контекст подключения с текущего лидера на реплику, если необходимо.
      *
-     * @return результат переключения в виде CommonResponse
+     * @return объект {@link CommonResponse}, представляющий результат переключения
      */
     CommonResponse change();
 
     /**
-     * Закрывает и удаляет источники данных, которые не соответствуют текущему списку членов кластера.
+     * Закрывает неиспользуемые источники данных на основе информации о членах кластера.
      *
-     * @param clusterMemberDTO DTO с данными о членах кластера
-     * @return результат выполнения операции в виде CommonResponse
+     * @param clusterMemberDTO DTO, содержащий список членов кластера
+     * @return объект {@link CommonResponse}, представляющий результат операции закрытия
      */
     CommonResponse close(ClusterMemberDTO clusterMemberDTO);
 }

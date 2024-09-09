@@ -56,7 +56,7 @@ public class DataSourceConfig {
 
         HikariDataSource dsFake = getHikariDataSourceForFakeDB();
 
-        targetDataSources.put("fakeDatabaseName", dsFake);
+        targetDataSources.put("fakeDataSourceKey", dsFake);
 
         dsMultiRouting.setDefaultTargetDataSource(dsFake);
         dsMultiRouting.setTargetDataSources(targetDataSources);

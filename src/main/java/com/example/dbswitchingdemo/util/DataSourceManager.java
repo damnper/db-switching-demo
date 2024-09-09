@@ -21,7 +21,8 @@ import java.util.*;
 
 /**
  * Утилитарный класс для управления источниками данных.
- * Содержит методы для создания, проверки, удаления и закрытия источников данных.
+ * Содержит методы для создания, проверки, обновления, удаления и закрытия источников данных.
+ * Поддерживает динамическое управление источниками данных в рамках мульти-тенантной архитектуры.
  */
 @Slf4j
 public class DataSourceManager {
@@ -32,22 +33,24 @@ public class DataSourceManager {
     public static final String JDBC_POSTGRESQL = "jdbc:postgresql://%s:%d/%s";
 
     /**
-     * Создает новый источник данных для члена кластера.
+     * Создает новый источник данных для члена кластера на основе переданных параметров.
      *
-     * @param member объект MemberDTO с данными члена кластера
-     * @param dataSourceKey уникальный ключ источника данных
-     * @param dsProperties настройки подключения к базе данных
+     * @param host            хост базы данных
+     * @param port            порт базы данных
+     * @param dataSourceKey   уникальный ключ источника данных
+     * @param dsProperties    настройки подключения к базе данных
      * @param dataSourceConfig конфигурация для создания источника данных
-     * @return созданный HikariDataSource
+     * @return созданный {@link HikariDataSource}
      * @throws DataSourceFailedConnectionException если не удалось подключиться к базе данных
      */
-    public static HikariDataSource create(MemberDTO member,
+    public static HikariDataSource create(String host,
+                                          Integer port,
                                           String dataSourceKey,
                                           DataSourceProperties dsProperties,
                                           DataSourceConfig dataSourceConfig) {
         try {
-            String url = buildJdbcUrl(member.getHost(), member.getPort(), dsProperties.getName());
-            testDatabaseConnection(member, url, dsProperties);
+            String url = buildJdbcUrl(host, port, dsProperties.getName());
+            testDatabaseConnection(host, port, url, dsProperties);
 
             HikariDataSource newDataSource = dataSourceConfig.createHikariDataSource(url);
 
@@ -61,13 +64,27 @@ public class DataSourceManager {
     /**
      * Генерирует уникальный ключ для источника данных на основе хоста и порта.
      *
-     * @param member объект MemberDTO с данными члена кластера
+     * @param member объект {@link MemberDTO}, представляющий данные члена кластера
      * @return уникальный ключ источника данных
      */
     public static String buildUniqueKey(MemberDTO member) {
         return member.getHost() + ":" + member.getPort();
     }
 
+    /**
+     * Проверяет статус существующего источника данных в пуле и обновляет его при необходимости.
+     * <p>
+     * Этот метод выполняет проверку статуса источника данных на основе переданного члена кластера и ключа источника.
+     * Если источник данных уже существует и его роль не изменилась, возвращается {@code true}.
+     * Если роль изменилась, источник данных обновляется с новой ролью и возвращается {@code true}.
+     * В случае, если источник данных не существует или не требует изменений, возвращается {@code false}.
+     *
+     * @param member       объект {@link MemberDTO}, представляющий данные члена кластера
+     * @param dsKey        уникальный ключ источника данных
+     * @param dsActivePool текущий пул активных источников данных
+     * @return {@code true}, если источник данных существует и его роль обновлена или не изменилась;
+     * {@code false}, если источник данных не требует обновления
+     */
     public static boolean checkStatus(MemberDTO member, String dsKey, Map<String, DataSourceDTO> dsActivePool) {
         DataSourceStatus dsStatus = getStatus(member, dsKey, dsActivePool);
 
@@ -91,32 +108,38 @@ public class DataSourceManager {
 
     /**
      * Добавляет новый источник данных в пул и маршрутизацию.
+     * <p>
+     * После добавления источник данных становится доступным для маршрутизации запросов.
      *
-     * @param dsKey ключ источника данных
-     * @param dbName имя базы данных
-     * @param role роль источника данных (leader или replica)
-     * @param ds объект HikariDataSource для добавления
-     * @param dsMultiRouting объект MultiRoutingDataSource для маршрутизации
-     * @param dsActivePool пул активных источников данных
-     * @return добавленный DataSourceDTO
+     * @param host          хост базы данных
+     * @param port          порт базы данных
+     * @param dsKey         ключ источника данных
+     * @param dbName        имя базы данных
+     * @param role          роль источника данных (например, leader или replica)
+     * @param ds            объект {@link HikariDataSource} для добавления
+     * @param dsMultiRouting объект {@link MultiRoutingDataSource} для маршрутизации
+     * @param dsActivePool  пул активных источников данных
+     * @return добавленный объект {@link DataSourceDTO}
      */
-    public static DataSourceDTO add(String dsKey,
+    public static DataSourceDTO add(String host,
+                                    Integer port,
+                                    String dsKey,
                                     String dbName,
                                     String role,
                                     HikariDataSource ds,
                                     MultiRoutingDataSource dsMultiRouting,
                                     Map<String, DataSourceDTO> dsActivePool) {
-        dsActivePool.put(dsKey, new DataSourceDTO(ds, dsKey, dbName, role));
+        dsActivePool.put(dsKey, new DataSourceDTO(ds, dsKey, dbName, host, port, role));
         DataSourceDTO dsNewDTO = dsActivePool.get(dsKey);
-        dsMultiRouting.addDataSource(dbName, ds);
+        dsMultiRouting.addDataSource(ds, dsKey);
         return dsNewDTO;
     }
 
     /**
-     * Находит источник данных с ролью leader.
+     * Находит источник данных с ролью leader в пуле активных источников данных.
      *
      * @param dsActivePool пул активных источников данных
-     * @return DataSourceDTO с ролью leader или null, если не найдено
+     * @return объект {@link DataSourceDTO} с ролью leader или {@code null}, если не найдено
      */
     public static DataSourceDTO findLeaderDataSource(Map<String, DataSourceDTO> dsActivePool) {
         return dsActivePool.values().stream()
@@ -126,10 +149,10 @@ public class DataSourceManager {
     }
 
     /**
-     * Находит источник данных с ролью replica.
+     * Находит источник данных с ролью replica в пуле активных источников данных.
      *
      * @param dsActivePool пул активных источников данных
-     * @return DataSourceDTO с ролью replica
+     * @return объект {@link DataSourceDTO} с ролью replica
      * @throws ResourceNotFound если реплика не найдена
      */
     public static DataSourceDTO findReplicaDataSource(Map<String, DataSourceDTO> dsActivePool) {
@@ -140,12 +163,13 @@ public class DataSourceManager {
     }
 
     /**
-     * Удаляет источники данных, которые больше не используются в текущем состоянии кластера
-     * из активного пула и маршрутизации.
+     * Удаляет источники данных, которые больше не используются, из активного пула и маршрутизации.
+     * <p>
+     * Источники данных удаляются, если они не указаны в списке активных членов кластера.
      *
-     *
-     * @param memberNames набор имен активных членов кластера
-     * @param dsActivePool пул активных источников данных
+     * @param memberNames   набор имен активных членов кластера
+     * @param dsMultiRouting объект для управления маршрутизацией источников данных
+     * @param dsActivePool  пул активных источников данных
      * @return список удаленных источников данных
      */
     public static List<DataSourceDTO> remove(Set<String> memberNames,
@@ -163,7 +187,7 @@ public class DataSourceManager {
                 DataSource dsToRemoved = dsDTOToRemoved.getDataSource();
 
                 // удаление из маршрутизатора и активного пула
-                dsMultiRouting.removeDataSource(dsDTOToRemoved.getDatabaseName(), dsDTOToRemoved.getDataSourceKey());
+                dsMultiRouting.removeDataSource(dsDTOToRemoved.getDataSourceKey());
                 iterator.remove();
 
                 closeExistingDataSource(dsToRemoved); // закрытие соединения
@@ -180,14 +204,14 @@ public class DataSourceManager {
     /**
      * Очищает контекст источника данных, если текущий источник совпадает с удаляемым источником данных.
      *
-     * <p> Этот метод проверяет, присутствует ли текущий контекст источника данных в {@link DataSourceContextHolder}.
-     * Если ключ текущего источника данных совпадает с ключом удаляемого источника, контекст очищается. </p>
+     * <p> Если текущий ключ источника данных в {@link DataSourceContextHolder} совпадает с ключом удаляемого
+     * источника, контекст очищается для предотвращения утечек данных и корректного завершения работы.
      *
      * @param dsDTOToRemoved объект {@link DataSourceDTO}, представляющий удаляемый источник данных
      */
     private static void clearContextDataSourceIfEqualsRemovedDataSource(DataSourceDTO dsDTOToRemoved) {
         if (DataSourceContextHolder.getDataSourceContext().isPresent()) {
-            if (Objects.equals(DataSourceContextHolder.getDataSourceContext().get().dataSourceKey(),
+            if (Objects.equals(DataSourceContextHolder.getDataSourceContext().get(),
                     dsDTOToRemoved.getDataSourceKey())) {
                 DataSourceContextHolder.clearDataSourceContext();
             }
@@ -195,14 +219,16 @@ public class DataSourceManager {
     }
 
     /**
-     * Проверяет, существует ли источник данных для указанного члена кластера и
-     * определяет его статус (существующий, с изменённой ролью или новый).
+     * Определяет статус источника данных на основе информации о члене кластера и существующих данных.
+     * <p>
+     * Если источник данных существует с той же ролью, возвращает статус {@link DataSourceStatus#EXISTS}.
+     * Если роль источника данных изменилась, возвращает статус {@link DataSourceStatus#ROLE_CHANGED}.
+     * Если источник данных отсутствует, возвращает {@link DataSourceStatus#NEW}.
      *
-     * @param member объект MemberDTO с данными члена кластера
-     * @param dsKey ключ источника данных
+     * @param member       объект {@link MemberDTO}, представляющий данные члена кластера
+     * @param dsKey        ключ источника данных
      * @param dsActivePool пул активных источников данных
-     * @return статус источника данных: {@link DataSourceStatus#EXISTS}, если источник уже существует с той же ролью,
-     * {@link DataSourceStatus#ROLE_CHANGED}, если роль изменена, или {@link DataSourceStatus#NEW}, если источник данных новый
+     * @return статус источника данных: {@link DataSourceStatus#EXISTS}, {@link DataSourceStatus#ROLE_CHANGED} или {@link DataSourceStatus#NEW}
      */
     private static DataSourceStatus getStatus(MemberDTO member,
                                               String dsKey,
@@ -224,8 +250,8 @@ public class DataSourceManager {
     /**
      * Формирует URL JDBC для подключения к базе данных.
      *
-     * @param host хост базы данных
-     * @param port порт базы данных
+     * @param host         хост базы данных
+     * @param port         порт базы данных
      * @param databaseName имя базы данных
      * @return сгенерированный URL JDBC
      */
@@ -235,18 +261,22 @@ public class DataSourceManager {
 
     /**
      * Тестирует соединение с базой данных.
+     * <p>
+     * Выполняет тестовое подключение к базе данных для проверки доступности.
      *
-     * @param member объект MemberDTO с данными члена кластера
-     * @param url URL подключения к базе данных
+     * @param host         хост базы данных
+     * @param port         порт базы данных
+     * @param url          URL подключения к базе данных
      * @param dsProperties настройки подключения
      */
-    private static void testDatabaseConnection(MemberDTO member,
+    private static void testDatabaseConnection(String host,
+                                               Integer port,
                                                String url,
                                                DataSourceProperties dsProperties) {
         try (Connection ignored = DriverManager.getConnection(url, dsProperties.getUsername(), dsProperties.getPassword())) {
             log.info("Connection is successfully established for '{}'", url);
         } catch (SQLException e) {
-            log.warn("Failed to connect to the database at '{}:{}', skipping creation for this node.", member.getHost(), member.getPort());
+            log.warn("Failed to connect to the database at '{}:{}', skipping creation for this node.", host, port);
         }
     }
 

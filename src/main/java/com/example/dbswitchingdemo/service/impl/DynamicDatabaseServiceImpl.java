@@ -4,7 +4,6 @@ import com.example.dbswitchingdemo.config.DataSourceConfig;
 import com.example.dbswitchingdemo.config.DataSourceContextHolder;
 import com.example.dbswitchingdemo.config.DataSourceProperties;
 import com.example.dbswitchingdemo.config.MultiRoutingDataSource;
-import com.example.dbswitchingdemo.dto.DataSourceContextDTO;
 import com.example.dbswitchingdemo.dto.DataSourceDTO;
 import com.example.dbswitchingdemo.dto.request.ClusterMemberDTO;
 import com.example.dbswitchingdemo.dto.request.ClusterMemberDTO.MemberDTO;
@@ -29,9 +28,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
- * <p> Реализация сервиса для динамического управления источниками данных. </p>
- * <p> Этот сервис позволяет выполнять создание, переключение и закрытие источников данных в кластере.
- * Также проверяет соединение с базой данных перед созданием нового источника данных и логирует изменения. </p>
+ * Реализация сервиса для динамического управления источниками данных.
+ * Этот сервис поддерживает создание, переключение и закрытие источников данных в кластере.
+ * Также проверяет соединение с базой данных перед созданием нового источника и логирует изменения.
  */
 @Service
 @RequiredArgsConstructor
@@ -46,15 +45,17 @@ public class DynamicDatabaseServiceImpl implements DynamicDatabaseService {
     private final Map<String, DataSourceDTO> dsActivePool = new ConcurrentHashMap<>();
 
     /**
-     * Инициализация пула источников данных с фейковым источником для базовой настройки.
+     * Инициализация пула источников данных с фейковым источником данных для базовой настройки.
      */
     @PostConstruct
     private void init() {
-        Object dsFake = dsMultiRouting.getTargetDataSources().get("fakeDatabaseName");
-        dsActivePool.put("fakeDataSource", new DataSourceDTO(
+        Object dsFake = dsMultiRouting.getTargetDataSources().get("fakeDataSourceKey");
+        dsActivePool.put("fakeDataSourceKey", new DataSourceDTO(
                 (HikariDataSource) dsFake,
                 "fakeDataSourceKey",
                 "fakeDatabaseName",
+                "fakeHost",
+                0,
                 "fakeRole") );
     }
 
@@ -81,8 +82,8 @@ public class DynamicDatabaseServiceImpl implements DynamicDatabaseService {
     public CommonResponse change() {
         DataSourceDTO dsLeader = DataSourceManager.findLeaderDataSource(dsActivePool);
 
-        DataSourceContextDTO curContext = DataSourceContextHolder.getDataSourceContext()
-                .orElse(new DataSourceContextDTO(dsLeader.getDataSourceKey(), dsLeader.getDatabaseName()));
+        String curContext = DataSourceContextHolder.getDataSourceContext()
+                .orElse(dsLeader.getDataSourceKey());
 
         return handleSwitch(dsLeader, curContext);
     }
@@ -101,10 +102,10 @@ public class DynamicDatabaseServiceImpl implements DynamicDatabaseService {
     }
 
     /**
-     * Обрабатывает обновление источников данных на основе списка новых членов кластера.
+     * Обрабатывает обновление источников данных на основе списка членов кластера.
      *
-     * @param members список членов кластера
-     * @return результат выполнения операции в виде CommonResponse
+     * @param members список новых членов кластера
+     * @return объект {@link CommonResponse}, представляющий результат операции обновления
      */
     private CommonResponse handleRefresh(List<MemberDTO> members) {
         List<DataSourceDTO> dsNewList = new ArrayList<>();
@@ -114,10 +115,10 @@ public class DynamicDatabaseServiceImpl implements DynamicDatabaseService {
             if (DataSourceManager.checkStatus(member, dsKey, dsActivePool)) return;
 
             try {
-                HikariDataSource dsNew = DataSourceManager.create(member, dsKey, dsProperties, dsConfig);
+                HikariDataSource dsNew = DataSourceManager.create(member.getHost(), member.getPort(), dsKey, dsProperties, dsConfig);
                 DataSourceDTO dsNewDTO = DataSourceManager.add(
-                        dsKey, dsProperties.getName(), member.getRole(),
-                        dsNew, dsMultiRouting, dsActivePool
+                        member.getHost(), member.getPort(), dsKey, dsProperties.getName(),
+                        member.getRole(), dsNew, dsMultiRouting, dsActivePool
                 );
 
                 dsNewList.add(dsNewDTO);
@@ -143,33 +144,32 @@ public class DynamicDatabaseServiceImpl implements DynamicDatabaseService {
      *
      * @param dsLeader текущий лидер источников данных
      * @param curContext текущий контекст подключения
-     * @return результат переключения в виде CommonResponse
+     * @return объект {@link CommonResponse}, представляющий результат переключения
      */
-    private CommonResponse handleSwitch(DataSourceDTO dsLeader, DataSourceContextDTO curContext) {
-        if (dsLeader != null && curContext.dataSourceKey().equals(dsLeader.getDataSourceKey()) ) {
+    private CommonResponse handleSwitch(DataSourceDTO dsLeader, String curContext) {
+        if (dsLeader != null && curContext.equals(dsLeader.getDataSourceKey()) ) {
             DataSourceDTO dsReplica = DataSourceManager.findReplicaDataSource(dsActivePool);
 
-            DataSourceContextHolder.setDataSourceContext(
-                    new DataSourceContextDTO(dsReplica.getDataSourceKey(), dsReplica.getDatabaseName()));
+            DataSourceContextHolder.setDataSourceContext(dsReplica.getDataSourceKey());
 
             return processSwitchResult(dsReplica.getDataSourceKey(), true, "Switched to replica DataSource");
         }
-        return processSwitchResult(curContext.dataSourceKey(), false, "Already connected to replica DataSource");
+        return processSwitchResult(curContext, false, "Already connected to replica DataSource");
     }
 
     /**
      * Обрабатывает результат переключения источника данных.
      *
-     * @param dsKey ключ источника данных
-     * @param switched флаг, указывающий, было ли успешное переключение
-     * @param message сообщение о результате
-     * @return объект CommonResponse с результатом операции
+     * @param dsKey ключ нового источника данных
+     * @param switched флаг, указывающий на успешное переключение
+     * @param message сообщение о результате переключения
+     * @return объект {@link CommonResponse} с результатом операции
      */
     private CommonResponse processSwitchResult(String dsKey, boolean switched, String message) {
-        Optional<DataSourceContextDTO> newContext = DataSourceContextHolder.getDataSourceContext();
+        Optional<String> newContext = DataSourceContextHolder.getDataSourceContext();
 
         if (newContext.isPresent() && switched) { // NOTE: Это не обязательный функционал, используется для теста, что переключение соединения действительно произошло.
-            logSwitchRecord(newContext.get().dataSourceKey());
+            logSwitchRecord(newContext.get());
         }
 
         return CommonDataResponse.builder().status(HttpStatus.OK.name()).data(switched)
@@ -180,7 +180,7 @@ public class DynamicDatabaseServiceImpl implements DynamicDatabaseService {
     /**
      * Логирует переключение источника данных, записывая данные в репозиторий логов.
      *
-     * @param dsName имя источника данных
+     * @param dsName имя нового источника данных
      */
     private void logSwitchRecord(String dsName) {
         try {
@@ -196,15 +196,14 @@ public class DynamicDatabaseServiceImpl implements DynamicDatabaseService {
     /**
      * Обрабатывает закрытие неиспользуемых источников данных.
      *
-     * @param memberNames набор ключей членов кластера
-     * @return результат выполнения операции в виде CommonResponse
+     * @param memberNames набор уникальных ключей членов кластера
+     * @return объект {@link CommonResponse}, представляющий результат операции закрытия
      */
     private CommonResponse handleClose(Set<String> memberNames) {
         List<DataSourceDTO> dsClosedList = DataSourceManager.remove(memberNames, dsMultiRouting, dsActivePool);
 
         if (dsClosedList.isEmpty()) {
             return CommonResponse.builder().status(HttpStatus.NOT_MODIFIED.name())
-                    .message("No DataSources were closed as all are up-to-date.")
                     .build();
         }
 

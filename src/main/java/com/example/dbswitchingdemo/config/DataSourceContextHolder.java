@@ -1,40 +1,47 @@
 package com.example.dbswitchingdemo.config;
 
-import com.example.dbswitchingdemo.dto.DataSourceContextDTO;
-
 import java.util.Optional;
 
 /**
- * Класс DataSourceContextHolder управляет текущим контекстом источника данных (DataSource) с использованием {@link ThreadLocal}.
- * Это позволяет динамически переключать источники данных в зависимости от текущего контекста потока.
- * В качестве контекста используется {@link DataSourceContextDTO}, который содержит информацию о ключе источника данных и имени базы данных.
+ * Класс {@code DataSourceContextHolder} управляет текущим контекстом источника данных с использованием статической переменной.
+ * Этот класс позволяет переключать источники данных в зависимости от потока, обеспечивая возможность динамического
+ * выбора источника данных для каждого запроса.
+ * <p>
+ * Контекстом источника данных является строка, представляющая ключ источника данных, который может использоваться для
+ * выбора правильной базы данных или соединения в зависимости от текущего контекста.
  */
 public class DataSourceContextHolder {
 
-    private static DataSourceContextDTO contextHolder = null;
+    private static String contextHolder = null;
 
     /**
-     * Устанавливает контекст источника данных для текущего потока.
+     * Устанавливает текущий контекст источника данных.
+     * <p>
+     * Этот метод сохраняет ключ источника данных, который будет использоваться для определения активного подключения
+     * в последующих операциях.
      *
-     * @param dataSourceContextDTO объект {@link DataSourceContextDTO}, содержащий ключ источника данных и имя базы данных
+     * @param dsKey ключ источника данных, представляющий текущее подключение
      */
-    public static void setDataSourceContext(DataSourceContextDTO dataSourceContextDTO) {
-        contextHolder = dataSourceContextDTO;
+    public static void setDataSourceContext(String dsKey) {
+        contextHolder = dsKey;
     }
 
     /**
-     * Возвращает текущий контекст источника данных для текущего потока.
+     * Возвращает текущий контекст источника данных.
+     * <p>
+     * Если контекст был ранее установлен, возвращается его значение. Если контекст отсутствует, возвращается {@link Optional#empty()}.
      *
-     * @return {@link Optional}, содержащий {@link DataSourceContextDTO}, если контекст установлен, или {@code Optional.empty()}, если контекста нет
+     * @return {@link Optional}, содержащий ключ источника данных, или пустой {@link Optional}, если контекст не установлен
      */
-    public static Optional<DataSourceContextDTO> getDataSourceContext() {
+    public static Optional<String> getDataSourceContext() {
         return Optional.ofNullable(contextHolder);
     }
 
-
     /**
-     * Очищает контекст источника данных для текущего потока.
-     * Это полезно для предотвращения утечек данных и обеспечения корректного завершения работы с потоками.
+     * Очищает текущий контекст источника данных.
+     * <p>
+     * Этот метод сбрасывает сохраненное значение контекста, что полезно для предотвращения использования устаревшего
+     * контекста и избегания утечек данных между запросами.
      */
     public static void clearDataSourceContext() {
         contextHolder = null;
