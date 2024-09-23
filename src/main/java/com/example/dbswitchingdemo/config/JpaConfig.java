@@ -20,7 +20,7 @@ public class JpaConfig {
 
     @Bean
     public LocalContainerEntityManagerFactoryBean entityManagerFactory(
-            @Qualifier("multiRoutingDataSource") DataSource dataSource,
+            @Qualifier("kostil") DataSource dataSource,
             JpaVendorAdapter jpaVendorAdapter) {
         LocalContainerEntityManagerFactoryBean factoryBean = new LocalContainerEntityManagerFactoryBean();
         factoryBean.setDataSource(dataSource);

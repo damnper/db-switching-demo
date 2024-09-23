@@ -1,5 +1,2 @@
--- Создаем базу данных CallCenter
-CREATE DATABASE "CallCenter";
-
--- Создаем базу данных Infinity
-CREATE DATABASE "Infinity";
+CREATE DATABASE db1;
+CREATE DATABASE db2;
