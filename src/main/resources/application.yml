@@ -6,16 +6,26 @@ spring:
     name: db-switch-demo
 
   datasource:
-    username: user
-    password: pass
-    driver-class-name: org.postgresql.Driver
-    name: postgres
-    hikari:
-      maximum-pool-size: 10  # Увеличьте значение в зависимости от нагрузки
-      minimum-idle: 5        # Минимум свободных соединений
-      idle-timeout: 30000    # Таймаут для бездействующих соединений
-      max-lifetime: 600000   # Время жизни соединений
-      connection-timeout: 30000  # Таймаут для получения соединения
+    dbs:
+      db1:
+        urls:
+          - jdbc:postgresql://localhost:5433/db1
+          - jdbc:postgresql://localhost:5434/db1
+          - jdbc:postgresql://localhost:5435/db1
+        username: user
+        password: pass
+        driver-class-name: org.postgresql.Driver
+      db2:
+        urls:
+          - jdbc:postgresql://localhost:5433/db2
+          - jdbc:postgresql://localhost:5434/db2
+          - jdbc:postgresql://localhost:5435/db2
+        username: user
+        password: pass
+        driver-class-name: org.postgresql.Driver
+    routing:
+      leader-name: leader
+      replica-name: replica
 
   jpa:
     hibernate:
